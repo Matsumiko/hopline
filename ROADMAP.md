@@ -12,8 +12,9 @@ Roadmap ini mengatur urutan pembangunan. Status aktual dan bukti berada di [PROG
 
 - routing user A/B benar;
 - CONNECT berhasil;
-- versi binary dan config eksperimen tercatat;
-- stream aktif tidak rusak saat reload sesuai perilaku yang dipilih;
+- versi binary dan config eksperimen tercatat tanpa secret;
+- generation harness membuktikan stream aktif tetap hidup saat generation baru dipublish;
+- in-place SIGHUP yang memutus stream ditolak sebagai strategi preserve stream;
 - secret tidak bocor.
 
 ## Fase 1 — Vertical slice MVP
@@ -27,9 +28,11 @@ Roadmap ini mengatur urutan pembangunan. Status aktual dan bukti berada di [PROG
 - IP egress adalah IP node;
 - forced node bekerja;
 - pool kosong menghasilkan 503 cepat;
-- sync tanpa perubahan tidak reload;
+- config node baru dipublish sebagai generation baru;
+- generation lama didrain sampai nol koneksi aktif;
+- sync tanpa perubahan tidak membuat generation baru atau reload;
 - tests offline lulus;
-- secret redaction terverifikasi.
+- secret redaction dan active-stream preservation terverifikasi.
 
 ## Fase 2 — Health dan failover
 

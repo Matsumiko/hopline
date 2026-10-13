@@ -103,14 +103,17 @@ flowchart LR
     H --> D
 ```
 
-Gateway meminta kandidat node dari Picker, lalu membuka tunnel ke sing-box dengan ID node sebagai username. Scorer menerima hasil koneksi nyata dari gateway dan hasil probe dari Checker. Syncer menjaga daftar node di config sing-box, yang hanya dimuat ulang saat himpunan node berubah.
+Gateway meminta kandidat node dari Picker, lalu membuka tunnel ke inbound milik generation aktif sing-box dengan ID node sebagai username. Scorer menerima hasil koneksi nyata dari gateway dan hasil probe dari Checker. Syncer menjaga registry node. Perubahan config mem-publish generation baru pada listener lokal yang berbeda; generation lama tetap tersedia untuk koneksi yang sudah terikat sampai drain selesai.
 
-### Keputusan: mesin tunnel dan port
+### Keputusan: mesin tunnel, generation, dan port
 
-Mesin tunnel default adalah sing-box. Routing per username lewat inbound mixed dan rule auth\_user adalah fitur bawaannya, dan itu inti desain Hopline. Syncer sudah mem-parse format Clash sendiri, jadi kelebihan mihomo (membaca subscription Clash langsung) tidak dibutuhkan.
+Mesin tunnel default adalah sing-box. Routing per username lewat inbound mixed dan rule `auth_user` adalah fitur bawaannya, dan itu inti desain Hopline. Syncer sudah mem-parse format Clash sendiri, jadi kelebihan mihomo (membaca subscription Clash langsung) tidak dibutuhkan.
 
-- Kode mesin dipisah di balik satu interface kecil: membuat config, start dan reload, serta delay test. Dengan begitu mihomo bisa ditambahkan nanti tanpa menulis ulang Hopline.
-- Prasyarat Fase 1: tes di VPS bahwa satu inbound mixed dengan beberapa user mengarahkan tiap user ke outbound yang berbeda pada versi sing-box yang dipakai.
+- Kode mesin dipisah di balik interface kecil: membuat config generation, start, healthcheck, publish, drain, dan stop. `reload` in-place tidak menjadi primitive stream-preserving.
+- Setiap generation sing-box memakai listener localhost yang unik. Gateway menyimpan registry generation → port dan memilih generation aktif hanya untuk koneksi baru.
+- Generation lama tidak dihentikan sampai active connection count-nya nol. Jika jumlah port atau resource tidak mencukupi, sync menunggu dan tidak memutus stream.
+- Health state tidak membuat generation baru dan tidak me-reload sing-box. Generation baru hanya dibuat saat parameter koneksi atau himpunan node berubah.
+- Prasyarat Fase 1: tes di VPS bahwa satu inbound mixed dengan beberapa user mengarahkan tiap user ke outbound yang berbeda pada versi sing-box yang dipakai, lalu tes generation swap dengan koneksi aktif.
 
 Port default berada di rentang 18000-19000, di bawah range ephemeral Linux (32768-60999) dan menjauhi port umum tool proxy lain. Semua port bisa diubah lewat konfigurasi, terikat ke 127.0.0.1, dan diperiksa oleh hopline doctor.
 
@@ -171,6 +174,9 @@ Scorer menyimpan sliding window 20 hasil terakhir dan EWMA latensi per node (dan
 - FR-G3: Rantai ke sing-box: gateway membuka koneksi ke 127.0.0.1:18771, mengirim CONNECT dengan Proxy-Authorization Basic (ID node dan secret), lalu menyalurkan byte dua arah.
 - FR-G4: Klien menerima 200 Connection Established hanya setelah tunnel benar-benar siap.
 - FR-G5: Backpressure dan half-close ditangani dengan benar, memori tidak tumbuh pada stream panjang (SSE), dan shutdown menunggu koneksi aktif selesai.
+- FR-G5a: Setelah byte client diteruskan, Hopline **MUST NOT** memutus stream aktif karena sync, perubahan health, rotasi, config update, atau generation swap. POST yang sudah terkirim dan SSE yang sedang berjalan tidak boleh dibuat gagal oleh lifecycle Hopline.
+- FR-G5b: Config node baru memakai generation baru. Koneksi baru diarahkan ke generation aktif; generation lama tetap melayani koneksi yang sudah terikat sampai koneksi selesai, lalu baru dihentikan.
+- FR-G5c: Jika engine tidak mendukung swap tanpa gangguan pada listener, Hopline **MUST NOT** melakukan reload/restart otomatis saat ada stream aktif. Update ditunda atau service masuk maintenance tanpa memutus koneksi aktif.
 - FR-G6: Bind ke 127.0.0.1 secara default. Jika dibuka ke luar, autentikasi wajib dan sistem memberi peringatan.
 
 | Username | Arti |
@@ -189,17 +195,23 @@ Control API berjalan di port terpisah (usulan 127.0.0.1:18772) dan dilindungi to
 - POST /sync, POST /nodes/{id}/disable, POST /nodes/{id}/enable, POST /nodes/{id}/probe.
 - CLI: hopline run, sync, status, nodes, test (request lewat gateway dan tampilkan IP keluar), dan doctor (cek binary sing-box, port, validitas config, konektivitas).
 
-## Resilience dan penanganan kegagalan
+Kegagalan sebelum byte klien diteruskan dapat disembunyikan melalui failover. Setelah byte klien diteruskan, koneksi telah menjadi tanggung jawab relay dan lifecycle Hopline tidak boleh memutuskannya.
 
-Kegagalan sebelum byte klien diteruskan disembunyikan lewat failover. Setelah byte klien diteruskan, Hopline tidak mengulang apa pun, karena tunnel CONNECT berisi TLS yang buram dan gateway tidak bisa tahu apakah provider sudah memproses request.
+Invariant tegas:
+
+> Hopline tidak pernah memutus stream aktif karena sync, reload, rotasi, perubahan health, atau generation swap. POST yang sudah terkirim tidak boleh gagal karena Hopline sendiri.
+
+Generation swap adalah mekanisme perubahan config: generation baru menerima koneksi baru, generation lama tetap hidup sampai semua koneksi yang telah terikat selesai. Jika swap tanpa gangguan tidak tersedia, perubahan config ditunda; jangan mengorbankan stream aktif.
 
 | Situasi | Tindakan |
-| --- | --- |
+|---|---|
 | Connect atau handshake gagal sebelum byte klien diteruskan | Laporkan kegagalan ke Scorer, coba kandidat berikutnya (maksimal 3 percobaan) |
 | Node pertama belum menjawab dalam sekitar 1,5 detik | Hedged connect: jalankan kandidat kedua paralel, pakai yang selesai lebih dulu, batalkan yang lain |
-| Node mati setelah byte klien diteruskan | Tidak ada retry otomatis, error diteruskan ke klien |
+| Node mati setelah byte klien diteruskan | Tidak ada retry otomatis; error diteruskan ke klien |
+| Sync/config berubah saat stream aktif | Generation baru untuk koneksi baru; generation lama di-drain tanpa memutus stream |
+| Engine hanya mendukung reload yang memutus stream | Tunda update atau maintenance eksplisit; **jangan reload otomatis** |
 | POST ke API AI sudah terkirim | Tidak pernah di-retry otomatis, mencegah biaya atau aksi ganda |
-| Stream (SSE) putus di tengah | Tidak dilanjutkan, error diteruskan ke klien |
+| Stream (SSE) putus di tengah karena upstream | Tidak dilanjutkan, error diteruskan; Hopline tidak boleh menjadi penyebab putus |
 | Banyak node gagal bersamaan | Retry budget global (sekitar 10% dari koneksi terakhir) mencegah retry storm |
 | Semua node tidak tersedia | 503 cepat dengan pesan jelas, tanpa menggantung |
 
@@ -233,17 +245,7 @@ Data disimpan di SQLite supaya Hopline tidak lupa node mana yang mati setelah re
 | --- | --- |
 | Subscription | Nama, URL (disimpan sebagai secret), ETag, waktu sync terakhir, hasil sync |
 | Node | ID stabil, protokol, server, port, kredensial (secret), tag (negara, sumber, protokol), status removed, IP keluar, negara, ASN |
-| Status kesehatan | Per (node, grup tujuan): state, window hasil, EWMA latensi, waktu tes ulang berikutnya |
-| Riwayat kesehatan | Hasil probe dan koneksi, dibatasi bergulir agar database tidak membesar |
-| Sesi sticky | Sesi, node terikat, waktu kedaluwarsa (opsional) |
-
-Konfigurasi memakai satu file YAML dengan default yang masuk akal dan divalidasi dengan pydantic. Secret boleh dibaca dari variabel lingkungan. File contoh config.example.yaml berisi komentar untuk setiap opsi.
-
-- Subscription: daftar nama dan URL.
-- Port: gateway, sing-box, Control API, serta token Control API dan secret Clash API.
-- sing-box: path binary dan versi.
-- Sinkronisasi: interval sync dan batas jumlah node.
-- Probe: target probe dan grup tujuan.
+Generation swap dan invariant stream aktif diatur oleh FR-G5a–FR-G5c dan bagian Resilience. Entitas data tidak memiliki kewenangan untuk memutus koneksi aktif.
 - Timeout dan ambang state machine: semua angka di bagian Scorer.
 - Batas: retry budget dan koneksi maksimum per node.
 - Logging: level, format, dan direktori data.
@@ -311,7 +313,8 @@ Gate F0:
 
 - Dua user menghasilkan dua jalur outbound yang benar.
 - HTTP `CONNECT` berhasil melalui inbound sing-box.
-- Reload konfigurasi tidak memutus stream yang sedang berjalan secara tidak terduga.
+- Harness generation membuktikan stream lama tetap hidup dan koneksi baru memakai generation baru.
+- In-place `SIGHUP` yang memutus stream tercatat sebagai perilaku yang tidak boleh dipakai untuk preserve stream.
 - Secret tidak muncul pada output proses atau error.
 - Hasil dan versi binary dicatat di [PROGRESS.md](PROGRESS.md).
 
@@ -326,8 +329,10 @@ Gate F1:
 - `HTTPS_PROXY=http://rotate:x@127.0.0.1:18770` menghasilkan IP node, bukan IP VPS.
 - Node dapat dipaksa dengan `node-<id>`.
 - Semua node mati menghasilkan 503 cepat dan jelas.
-- Config sing-box hanya dibuat ulang saat himpunan atau parameter node berubah.
+- Config node baru dipublish sebagai generation baru; generation lama tidak diputus sampai koneksi aktifnya nol.
+- Sync tanpa perubahan tidak membuat generation baru atau reload.
 - Tes berjalan tanpa akses jaringan menggunakan fixture dan mock.
+- Active-stream preservation dan secret redaction terverifikasi.
 
 ### Fase 2 — Health dan failover
 

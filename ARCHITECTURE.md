@@ -29,7 +29,7 @@ Menyediakan satu HTTP proxy lokal yang memilih egress node per koneksi, memantau
 - **Scorer:** menyimpan state health, sliding window, EWMA, cooldown, hysteresis, dan feedback koneksi.
 - **Checker:** menjalankan active probe dan menerima hasil pasif dari gateway.
 - **Syncer:** fetch subscription, parse, validasi, dedup, tagging, dan sinkronisasi registry.
-- **TunnelEngine:** adapter lifecycle sing-box, generator config, reload, healthcheck, dan crash detection.
+- **TunnelEngine:** adapter lifecycle sing-box, generator config, generation management, healthcheck, dan crash detection. Reload tidak boleh mengganggu stream aktif.
 - **Storage:** SQLite untuk subscription, node, health, history terbatas, dan sticky session.
 - **Control:** API token-protected dan CLI operator.
 
@@ -56,22 +56,32 @@ subscription URL
   → parser protocol/format
   → validate + stable ID + dedup
   → compare node set
-  → SQLite registry
-  → regenerate/reload sing-box only when connection config changes
+  → publish new engine generation for new connections
+  → drain old generation without closing active streams
 ```
 
-Status health tidak menyebabkan reload config.
+Status health tidak menyebabkan reload atau restart engine. Jika engine yang dipakai tidak mendukung generation swap tanpa memutus stream, perubahan config ditunda sampai aman atau membutuhkan maintenance eksplisit; Hopline tidak memutus stream aktif untuk mengejar update.
 
+## Generation dan Stream Ownership
+
+- Gateway menandai koneksi sebagai `pre_forward` sampai tunnel siap dan byte client pertama diteruskan.
+- Setelah forwarding dimulai, koneksi memiliki owner generation dan tidak boleh dipindahkan.
+- Generation baru hanya menerima koneksi baru.
+- Generation lama dihentikan hanya setelah jumlah koneksi aktifnya nol.
+- Shutdown normal menunggu generation aktif dan generation lama selesai; timeout shutdown menghasilkan status operasional yang jelas, bukan retry traffic.
 ## Invariant
 
 1. Default bind hanya `127.0.0.1`.
 2. `200 Connection Established` berarti tunnel telah siap.
 3. Tidak ada retry setelah byte client diteruskan.
-4. Reload sing-box tidak dipicu perubahan health saja.
-5. Secret tidak keluar dari boundary secret handling.
-6. Pool kosong menghasilkan 503 bounded, bukan hang.
-7. Stream tidak dibuffer seluruhnya di memory.
-8. Sticky session dapat direbind ketika node terikat tidak tersedia.
+4. **Hopline tidak memutus stream aktif karena lifecycle atau config update.**
+5. Config node baru memakai generation baru; generation lama di-drain sampai koneksinya selesai.
+6. Jika engine tidak mendukung generation swap, update config ditunda ketika ada stream aktif.
+7. Health state tidak memicu reload/restart engine aktif.
+8. Secret tidak keluar dari boundary secret handling.
+9. Pool kosong menghasilkan 503 bounded, bukan hang.
+10. Stream tidak dibuffer seluruhnya di memory.
+11. Sticky session dapat direbind ketika node terikat tidak tersedia.
 
 ## Data Ownership
 

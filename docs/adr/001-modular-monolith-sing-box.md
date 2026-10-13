@@ -8,9 +8,9 @@
 
 Hopline perlu mengoordinasikan gateway, pemilihan node, health state, subscription sync, storage, dan lifecycle tunnel engine. Target pengguna adalah developer atau tim kecil pada satu VPS. Sebagian besar state tersebut perlu konsisten di dalam satu proses, sementara sing-box sudah menyediakan implementasi protokol tunnel yang tidak perlu ditulis ulang.
 
-## Decision
+Hopline dibangun sebagai modular monolith Python 3.11+ berbasis asyncio. sing-box dijalankan sebagai subprocess dan diakses melalui adapter `TunnelEngine` yang memiliki tanggung jawab membuat config generation, start, healthcheck, publish, drain, dan stop.
 
-Hopline dibangun sebagai modular monolith Python 3.11+ berbasis asyncio. sing-box dijalankan sebagai subprocess dan diakses melalui adapter `TunnelEngine` yang memiliki tanggung jawab start, reload, healthcheck, stop, dan pembuatan config.
+Perubahan config tidak memakai in-place reload sebagai primitive stream-preserving. Generation sing-box memakai listener localhost terpisah; generation lama tetap hidup sampai koneksi aktifnya selesai. Detail invariant active-stream ada di [ADR-002](002-preserve-active-streams.md).
 
 Modul internal memiliki boundary kode yang jelas, tetapi tidak dipisahkan menjadi service atau network process pada fase awal.
 

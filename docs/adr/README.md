@@ -14,7 +14,7 @@ ADR menyimpan alasan keputusan yang memengaruhi boundary, dependency, lifecycle,
 | ID | Keputusan | Status |
 |---|---|---|
 | [ADR-001](001-modular-monolith-sing-box.md) | Modular monolith Python dengan sing-box sebagai tunnel subprocess | accepted untuk baseline Fase 0–1 |
-
+| [ADR-002](002-preserve-active-streams.md) | Preserve active streams saat perubahan config | accepted untuk runtime Hopline |
 ## Aturan
 
 - Jangan mengubah keputusan accepted secara diam-diam; buat ADR baru jika keputusan berubah.

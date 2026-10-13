@@ -23,7 +23,9 @@
 7. Jangan menambah retry, validasi, telemetry, atau abstraksi di luar scope tanpa keputusan tertulis.
 8. Secret subscription, credential node, token, dan API key tidak boleh masuk log, test fixture publik, metrics, atau commit.
 9. Retry traffic hanya boleh terjadi sebelum byte client diteruskan; setelah forwarding tidak ada retry otomatis.
-10. Gunakan pola dan struktur dokumen yang sudah ada; jangan membuat dokumen kedua untuk informasi yang sama.
+10. Hopline MUST NOT memutus active stream karena sync, health, rotation, config update, generation swap, atau shutdown normal.
+11. Gunakan generation baru untuk koneksi baru; drain generation lama sampai koneksi aktif nol. Jangan gunakan in-place SIGHUP sebagai primitive stream-preserving.
+12. Gunakan pola dan struktur dokumen yang sudah ada; jangan membuat dokumen kedua untuk informasi yang sama.
 
 ## Urutan Kerja
 
