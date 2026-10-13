@@ -13,37 +13,51 @@
 - Fase 0–4 memiliki output dan gate eksplisit.
 - Keputusan awal tentang HTTP CONNECT, retry boundary, modular monolith, dan reload health dicatat di PRD.
 - Dokumen operasional awal dibuat: README, architecture, roadmap, contribution, security, changelog, ADR index, dan agent guidance.
+- Harness lokal F0 dibuat di `experiments/f0/run.py`; harness memakai dua fake HTTP CONNECT proxy dan origin lokal tanpa subscription/node nyata.
+- F0 routing dan CONNECT berhasil pada sing-box 1.14.3: `user-a → proxy-a`, `user-b → proxy-b`.
+- F0 reload berhasil menerapkan route baru setelah retry/downtime singkat; proses tetap hidup.
+- F0 redaction scan berhasil; `pass-a` dan `pass-b` tidak muncul di output sing-box.
+- F0 menemukan reload SIGHUP menutup stream aktif. Reload belum graceful untuk koneksi berjalan dan harus diperlakukan sebagai maintenance event.
 
 ## Sedang Dikerjakan
 
-- Menyiapkan eksperimen Fase 0 untuk memverifikasi routing sing-box berdasarkan `auth_user`.
+- Menentukan strategi TunnelEngine dan gateway agar reload config tidak dijanjikan graceful untuk stream aktif.
+- Menjalankan Fase 1 hanya setelah keputusan reload dan gate F0 dicatat.
 
 ## Berikutnya
 
-1. Tentukan versi binary sing-box yang akan diuji.
-2. Siapkan config eksperimen dengan dua outbound sintetis atau node uji yang sah.
-3. Verifikasi dua username menghasilkan dua jalur outbound.
-4. Verifikasi HTTP CONNECT dan lifecycle reload.
-5. Catat command, config yang sudah diretifikasi tanpa secret, output, dan hasil gate F0.
+1. Tetapkan strategi reload/drain berdasarkan temuan F0.
+2. Tambahkan eksperimen atau implementasi TunnelEngine yang tidak reload saat health berubah.
+3. Mulai Fase 1 vertical slice setelah batas reload terdokumentasi.
 
 ## Bukti
 
-Belum ada smoke run atau test runtime. Semua acceptance runtime masih `planned`.
+Eksperimen berikut dijalankan tiga kali dengan hasil konsisten:
+
+```text
+python3 -m py_compile experiments/f0/run.py
+timeout 10s python3 experiments/f0/run.py
+```
+
+Observed: config check, CONNECT, routing A/B, route baru setelah reload, proses tetap hidup, dan log secret scan lulus. `active_stream_survived_reload` bernilai `false` pada semua run.
+
+Gate F0: **partial pass**. Routing, CONNECT, reload route application, dan redaction pass. Graceful active-stream preservation gagal dan menjadi batas operasional eksplisit.
 
 ## Validasi Dokumentasi Baseline
 
 - Seluruh file yang dirujuk PRD dan README tersedia.
 - Link ke indeks ADR dan ADR-001 tersedia.
 - Placeholder diagram arsitektur di PRD diganti dengan diagram Mermaid yang memuat gateway, picker, sing-box, syncer, checker, scorer, dan SQLite.
-- Tidak ada smoke run runtime; Gate F0 tetap `planned`.
+- Validasi dokumentasi selesai sebelum eksperimen F0.
 
 ## Blocker / Risiko Aktif
 
 | Item | Status | Dampak | Cara membuka |
 |---|---|---|---|
-| Dukungan dan perilaku `auth_user` pada versi sing-box belum diverifikasi | open | Fase 1 tidak boleh dimulai sebelum routing terbukti | Jalankan eksperimen F0 |
+| Reload SIGHUP sing-box 1.14.3 menutup stream aktif | open | Reload node dapat mengganggu koneksi berjalan | Jangan reload karena health; uji strategi drain/restart pada F1 |
 | Batas koneksi aktif per node belum ditetapkan | deferred | Parameter operasi belum final | Load test F4 |
 | Target provider probe belum dipilih | deferred | Active probe F2 belum memiliki target final | Putuskan sebelum F2 |
+
 
 ## Keputusan Terbuka
 
