@@ -6,16 +6,25 @@ from .models import Node
 
 
 def _outbound(node: Node) -> dict[str, Any]:
+    outbound_type = "shadowsocks" if node.protocol == "ss" else node.protocol
     outbound: dict[str, Any] = {
-        "type": node.protocol,
+        "type": outbound_type,
         "tag": node.id,
         "server": node.server,
         "server_port": node.port,
-        "uuid": node.uuid,
     }
-    if node.tls:
+    if node.protocol in {"vless", "vmess"}:
+        outbound["uuid"] = node.uuid
+    elif node.protocol == "trojan":
+        outbound["password"] = node.uuid
+    elif node.protocol == "ss":
+        outbound["method"] = node.method or "chacha20-ietf-poly1305"
+        outbound["password"] = node.uuid
+    else:
+        raise ValueError(f"unsupported outbound protocol: {node.protocol}")
+    if node.tls and node.protocol != "ss":
         outbound["tls"] = {"enabled": True, "server_name": node.sni or node.server}
-    if node.transport_type and node.transport_type != "tcp":
+    if node.transport_type and node.transport_type != "tcp" and node.protocol != "ss":
         transport: dict[str, Any] = {"type": node.transport_type}
         if node.path:
             transport["path"] = node.path

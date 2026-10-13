@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, VLESS parser, config generator, bounded Syncer snapshot, dan SQLite registry tersedia; HTTP subscription fetch/CLI belum tersedia.
-- **Last verified:** test suite F1 dan sync→SQLite→generation integration lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, multi-protocol parser, config generator, HTTP fetcher, bounded Syncer snapshot, dan SQLite registry tersedia; scheduler/CLI belum tersedia.
+- **Last verified:** test suite F1, live subscription parse, dan 100-node sing-box config check lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,15 +26,15 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan HTTP subscription fetch, SQLite migration policy, dan CLI setelah kontrak snapshot runtime stabil.
+- Melanjutkan Fase 1 dengan scheduler sync, SQLite migration policy, dan CLI setelah kontrak fetch/runtime stabil.
 
 ## Berikutnya
 
-1. Tambahkan HTTP fetch dengan timeout, ETag/If-Modified-Since, dan last-valid body.
-2. Tambahkan parser fixture untuk Clash/sing-box JSON tanpa credential live.
-3. Tambahkan removed hysteresis setelah tiga sync berturut-turut.
+1. Tambahkan parser fixture untuk Clash/sing-box JSON tanpa credential live.
+2. Tambahkan removed hysteresis setelah tiga sync berturut-turut.
+3. Tambahkan scheduler interval/jitter dan konfigurasi subscription.
 4. Tambahkan CLI `hopline test` dan `hopline doctor`.
-5. Uji Gate F1 end-to-end dengan fixture subscription offline dan environment proxy.
+5. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
 
 ## Bukti
 
@@ -61,16 +61,20 @@ F1 test suite:
 ```text
 python3 -m py_compile hopline/*.py tests/*.py
 python3 -W error::ResourceWarning -m unittest discover -s tests -v
-Ran 14 tests — OK
+Ran 19 tests — OK
 ```
 
-Sync integration mencakup base64/VLESS snapshot, invalid-entry isolation, dedup lintas source, valid registry fallback, no-op snapshot, dan `Syncer.sync_text_and_apply()` yang mempertahankan generation sama saat parameter node tidak berubah.
+Sync integration mencakup base64/share-link snapshot, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, redacted headers, dan generation apply.
+
+Live subscription smoke dilakukan ephemeral dengan URL yang diberikan: `parsed=100`, `invalid=0`, protokol `ss/trojan/vless/vmess`, body tidak dicetak dan tidak disimpan ke repository.
+
+Generated config untuk 100 node subscription lulus `sing-box check`.
 
 Smoke config: `python3 -m tools.smoke_config` menghasilkan `config-generator=passed sing-box-check=passed secret=fixture-only`.
 
 Integration mencakup Gateway → sing-box → target HTTP lokal, upstream Basic Auth, rotate, generation publish, drain, dan active relay setelah listener stop.
 
-Gate F1: **in progress**. Runtime dan snapshot vertical slice lulus; HTTP subscription fetch, Clash/sing-box JSON, SQLite migration policy, CLI, dan acceptance melalui `HTTPS_PROXY` belum selesai.
+Gate F1: **in progress**. Runtime, HTTP fetch, dan snapshot vertical slice lulus; Clash/sing-box JSON, scheduler, SQLite migration policy, CLI, dan acceptance melalui `HTTPS_PROXY` belum selesai.
 
 ## Validasi Dokumentasi Baseline
 
@@ -84,7 +88,7 @@ Gate F1: **in progress**. Runtime dan snapshot vertical slice lulus; HTTP subscr
 | Item | Status | Dampak | Cara membuka |
 |---|---|---|---|
 | Reload SIGHUP sing-box 1.14.3 menutup stream aktif | mitigated | In-place reload melanggar invariant active stream | Gunakan generation subprocess/listener berbeda; jangan SIGHUP saat stream aktif |
-| HTTP subscription fetch belum tersedia | open | F1 belum mengambil URL subscription | Implementasikan timeout, cache body valid, dan conditional request |
+| HTTP fetch berkala/scheduler belum tersedia | open | F1 belum berjalan terus-menerus dari konfigurasi | Implementasikan interval, jitter, dan lifecycle scheduler |
 | Batas koneksi aktif per node belum ditetapkan | deferred | Parameter operasi belum final | Load test F4 |
 | Target provider probe belum dipilih | deferred | Active probe F2 belum memiliki target final | Putuskan sebelum F2 |
 

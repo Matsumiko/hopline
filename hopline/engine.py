@@ -40,7 +40,7 @@ class SingBoxEngine:
         signature = tuple(
             (
                 node.id, node.protocol, node.server, node.port, node.uuid,
-                node.tls, node.sni, node.transport_type, node.path, node.host,
+                node.tls, node.sni, node.transport_type, node.path, node.host, node.method,
             )
             for node in sorted(nodes, key=lambda item: item.id)
         )

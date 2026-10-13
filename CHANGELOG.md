@@ -54,6 +54,20 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 - Empat belas test F1 lulus tanpa `ResourceWarning`, termasuk sync snapshot → SQLite → sing-box generation dan no-op sync tanpa generation reload.
 
+### Added
+
+- `SubscriptionFetcher` dengan timeout, batas body, User-Agent, ETag, dan `If-Modified-Since`.
+- Registry menyimpan body valid terakhir dan metadata validator.
+- Parser snapshot untuk VLESS, Trojan, VMess, dan Shadowsocks.
+- Fallback ke registry valid terakhir saat fetch gagal; HTTP 304 menjadi no-op.
+- Generator sing-box memetakan outbound Shadowsocks ke tipe `shadowsocks`.
+
+### Verified
+
+- URL subscription pengguna diambil secara ephemeral: 100 node, 0 invalid, empat protokol.
+- Generated config 100 node lulus `sing-box check`.
+- Sembilan belas test lulus tanpa `ResourceWarning`; credential tidak dicetak, disimpan di fixture publik, atau masuk commit.
+
 ### Not Implemented Yet
 
 - Runtime gateway.

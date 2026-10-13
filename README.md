@@ -4,7 +4,7 @@ Hopline adalah gateway proxy lokal yang memilih node sehat dari subscription VMe
 
 Hopline ditujukan untuk developer atau tim kecil yang menjalankan script/bot di VPS dan membutuhkan satu endpoint proxy lokal tanpa mengubah routing jaringan VPS.
 
-> **Status:** Fase 1 sedang berjalan. Runtime vertical slice dan snapshot Syncer lokal tersedia; HTTP fetch berkala, CLI, health scoring, dan failover belum selesai.
+> **Status:** Fase 1 sedang berjalan. Runtime vertical slice, HTTP subscription fetch, dan multi-protocol snapshot Syncer tersedia; scheduler berkala, CLI, health scoring, dan failover belum selesai.
 
 ## Dokumen Utama
 
@@ -38,7 +38,7 @@ Hopline mengelola pemilihan, health, failover sebelum byte client diteruskan, si
 
 ## Status Saat Ini
 
-Package runtime tersedia di `hopline/`. Parser VLESS, bounded subscription snapshot Syncer, SQLite registry, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, node routing, drain, dan active-stream preservation sudah diuji offline. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
+Package runtime tersedia di `hopline/`. Parser VLESS, Trojan, VMess, dan Shadowsocks, bounded subscription fetch, SQLite registry, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, node routing, drain, dan active-stream preservation sudah diuji offline. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
 
 ## Batasan
 

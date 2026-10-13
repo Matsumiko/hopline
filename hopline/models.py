@@ -15,8 +15,8 @@ class Node:
     transport_type: str | None = None
     path: str | None = None
     host: str | None = None
+    method: str | None = None
     name: str | None = None
-
     @property
     def credential(self) -> str:
         return self.uuid
