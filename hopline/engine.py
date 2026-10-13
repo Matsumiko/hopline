@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import shutil
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .generation import Generation, GenerationManager
+
+
+@dataclass(slots=True)
+class RunningGeneration:
+    generation: Generation
+    directory: Path
+    process: asyncio.subprocess.Process
+
+
+class SingBoxEngine:
+    def __init__(
+        self,
+        *,
+        binary: str = "sing-box",
+        base_port: int = 18771,
+        workdir: str | Path | None = None,
+    ) -> None:
+        self.binary = binary
+        self.base_port = base_port
+        self.root = Path(workdir) if workdir else Path(tempfile.mkdtemp(prefix="hopline-engine-"))
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.manager = GenerationManager()
+        self._next_generation = 0
+        self._running: dict[str, RunningGeneration] = {}
+
+    async def start_generation(self, config: dict[str, Any]) -> Generation:
+        if shutil.which(self.binary) is None:
+            raise FileNotFoundError(f"tunnel binary not found: {self.binary}")
+        label = f"generation-{self._next_generation}"
+        self._next_generation += 1
+        port = self.base_port + self._next_generation - 1
+        directory = self.root / label
+        directory.mkdir(parents=True, exist_ok=False)
+        config_copy = json.loads(json.dumps(config))
+        config_copy["inbounds"][0]["listen_port"] = port
+        config_path = directory / "config.json"
+        config_path.write_text(json.dumps(config_copy, indent=2), encoding="utf-8")
+        check = await asyncio.create_subprocess_exec(
+            self.binary,
+            "check",
+            "-c",
+            str(config_path),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _stdout, stderr = await check.communicate()
+        if check.returncode != 0:
+            raise RuntimeError(f"sing-box config rejected: {stderr.decode(errors='replace').strip()}")
+        process = await asyncio.create_subprocess_exec(
+            self.binary,
+            "run",
+            "-D",
+            str(directory),
+            "-c",
+            str(config_path),
+            "--disable-color",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        generation = Generation(label=label, port=port)
+        self._running[label] = RunningGeneration(generation, directory, process)
+        try:
+            await self._wait_port(port, process)
+        except BaseException:
+            await self._terminate(process)
+            self._running.pop(label, None)
+            raise
+        self.manager.publish(generation)
+        return generation
+
+    async def stop_generation(self, generation: Generation) -> None:
+        running = self._running.get(generation.label)
+        if running is None:
+            return
+        await self.manager.wait_drained(generation)
+        await self._terminate(running.process)
+        self._running.pop(generation.label, None)
+
+    async def close(self) -> None:
+        for running in tuple(self._running.values()):
+            running.generation.accepting = False
+        await asyncio.gather(
+            *(self.stop_generation(running.generation) for running in tuple(self._running.values()))
+        )
+        if self.root.name.startswith("hopline-engine-"):
+            shutil.rmtree(self.root, ignore_errors=True)
+
+    @staticmethod
+    async def _wait_port(port: int, process: asyncio.subprocess.Process) -> None:
+        for _ in range(100):
+            if process.returncode is not None:
+                raise RuntimeError(f"sing-box exited before listener opened: {process.returncode}")
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection("127.0.0.1", port), 0.1
+                )
+                writer.close()
+                await writer.wait_closed()
+                return
+            except (OSError, asyncio.TimeoutError):
+                await asyncio.sleep(0.05)
+        raise TimeoutError(f"sing-box listener did not open: {port}")
+
+    @staticmethod
+    async def _terminate(process: asyncio.subprocess.Process) -> None:
+        if process.returncode is not None:
+            return
+        process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), 3)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()

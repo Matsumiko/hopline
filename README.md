@@ -4,7 +4,7 @@ Hopline adalah gateway proxy lokal yang memilih node sehat dari subscription VMe
 
 Hopline ditujukan untuk developer atau tim kecil yang menjalankan script/bot di VPS dan membutuhkan satu endpoint proxy lokal tanpa mengubah routing jaringan VPS.
 
-> **Status:** desain dan persiapan pembangunan. Implementasi runtime belum tersedia pada baseline ini.
+> **Status:** Fase 1 sedang berjalan. Runtime vertical slice dasar tersedia; subscription sync, SQLite registry, CLI, health scoring, dan failover belum selesai.
 
 ## Dokumen Utama
 
@@ -29,15 +29,16 @@ Interface utama adalah HTTP proxy dengan dukungan `CONNECT`. `rotate` memilih no
 ## Arsitektur Singkat
 
 ```text
-Client → Hopline Gateway :18770 → sing-box :18771 → selected node → target
-                         └──── Control API :18772
+Client → Hopline Gateway :18770 → sing-box generation → selected node → target
+                                  ├── generation lama: drain koneksi aktif
+                                  └── generation baru: koneksi baru
 ```
 
-Hopline mengelola pemilihan, health, failover sebelum byte client diteruskan, sinkronisasi subscription, dan lifecycle sing-box. Hopline tidak melakukan MITM dan tidak mengulang traffic setelah forwarding dimulai.
+Hopline mengelola pemilihan, health, failover sebelum byte client diteruskan, sinkronisasi subscription, dan lifecycle sing-box. Config update memakai generation baru; stream aktif tidak diputus oleh lifecycle Hopline. Hopline tidak melakukan MITM dan tidak mengulang traffic setelah forwarding dimulai.
 
 ## Status Saat Ini
 
-Baseline proyek hanya berisi PRD dan dokumentasi pembangunan. Fase pertama yang harus dikerjakan adalah feasibility test routing `auth_user` sing-box. Lihat [PROGRESS.md](PROGRESS.md).
+Package runtime tersedia di `hopline/`. Parser VLESS, config generator, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, node routing, drain, dan active-stream preservation sudah diuji offline. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
 
 ## Batasan
 

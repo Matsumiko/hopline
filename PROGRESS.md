@@ -3,9 +3,9 @@
 ## Status Baseline
 
 - **Status:** `in progress`
-- **Fase aktif:** Fase 1 — Vertical slice MVP, dengan pekerjaan generation lifecycle sebagai prasyarat
-- **Baseline:** dokumentasi, F0 harness, dan kontrak active-stream preservation tersedia; implementasi runtime Hopline belum dimulai.
-- **Last verified:** Fase 0 dan smoke node live diverifikasi tanpa menyimpan credential ke repository.
+- **Fase aktif:** Fase 1 — Vertical slice MVP
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, VLESS parser, dan config generator tersedia; subscription sync/SQLite/CLI belum tersedia.
+- **Last verified:** test suite F1 dan smoke integration lokal lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,15 +26,15 @@
 
 ## Sedang Dikerjakan
 
-- Mengimplementasikan generation-aware TunnelEngine dan gateway berdasarkan ADR-002.
-- Menambahkan parser node VLESS pertama hanya setelah boundary secret handling dan redaction test tersedia.
+- Melanjutkan Fase 1 dengan subscription sync, SQLite registry, dan CLI setelah kontrak runtime dasar stabil.
 
 ## Berikutnya
 
-1. Implementasikan generation-aware TunnelEngine dan port registry.
-2. Tambahkan gateway CONNECT yang mengikat koneksi ke generation sampai selesai.
-3. Tambahkan parser VLESS dan config generator dengan fixture sintetis tanpa credential live.
-4. Jalankan Gate F1 offline sebelum menambah parser atau probe lain.
+1. Tambahkan parser fixture untuk Clash/sing-box JSON tanpa credential live.
+2. Tambahkan SQLite registry dan sync snapshot valid terakhir.
+3. Integrasikan Syncer ke SingBoxEngine generation publish.
+4. Tambahkan CLI `hopline test` dan `hopline doctor`.
+5. Uji Gate F1 end-to-end dengan fixture subscription offline.
 
 ## Bukti
 
@@ -56,9 +56,19 @@ timeout 10s python3 experiments/f0/generation_swap.py
 
 Observed: `generation_swap=passed active_stream_preserved=passed new_connections_use_new_generation=passed`.
 
-Live-node smoke dijalankan dengan temporary config, bukan repository fixture. Observed egress `131.186.63.89`, berbeda dari VPS `103.247.23.141`; secret scan lulus.
+F1 test suite:
 
-Gate F0: partial pass untuk in-place SIGHUP; generation preservation proof lulus dan menjadi strategi yang diwajibkan untuk F1.
+```text
+python3 -m py_compile hopline/*.py tests/*.py
+python3 -W error::ResourceWarning -m unittest discover -s tests -v
+Ran 8 tests — OK
+```
+
+Smoke config: `python3 -m tools.smoke_config` menghasilkan `config-generator=passed sing-box-check=passed secret=fixture-only`.
+
+Integration mencakup Gateway → sing-box → target HTTP lokal, upstream Basic Auth, rotate, generation publish, drain, dan active relay setelah listener stop.
+
+Gate F1: **in progress**. Runtime vertical slice dasar lulus; subscription sync, SQLite registry, CLI, dan acceptance melalui `HTTPS_PROXY` belum selesai.
 
 ## Validasi Dokumentasi Baseline
 
@@ -72,6 +82,7 @@ Gate F0: partial pass untuk in-place SIGHUP; generation preservation proof lulus
 | Item | Status | Dampak | Cara membuka |
 |---|---|---|---|
 | Reload SIGHUP sing-box 1.14.3 menutup stream aktif | mitigated | In-place reload melanggar invariant active stream | Gunakan generation subprocess/listener berbeda; jangan SIGHUP saat stream aktif |
+| Subscription sync dan SQLite registry belum tersedia | open | F1 belum end-to-end dari URL subscription | Implementasikan snapshot sync offline |
 | Batas koneksi aktif per node belum ditetapkan | deferred | Parameter operasi belum final | Load test F4 |
 | Target provider probe belum dipilih | deferred | Active probe F2 belum memiliki target final | Putuskan sebelum F2 |
 

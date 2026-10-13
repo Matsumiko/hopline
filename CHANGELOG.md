@@ -32,6 +32,18 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - SIGHUP menutup stream aktif saat reload. Graceful reload belum tersedia dan tidak boleh diasumsikan oleh TunnelEngine.
 - Config live yang diberikan memiliki field `outbounds[0].encryption` yang ditolak sing-box 1.14.3; validasi sementara menghapus field legacy itu pada temporary config saja.
 
+### Added
+
+- Package runtime `hopline/` dengan model Node, parser VLESS, config generator sing-box, GenerationManager, SingBoxEngine, dan HTTP CONNECT Gateway.
+- Mode `rotate`, node-specific routing, upstream Basic Auth, generation publish, drain, dan listener stop tanpa memutus relay aktif.
+- Test suite offline dan integration smoke Gateway → sing-box → target lokal.
+- `tools/smoke_config.py` untuk memvalidasi generated config melalui `sing-box check`.
+
+### Verified
+
+- Delapan test F1 lulus tanpa `ResourceWarning`.
+- Generated config fixture lulus `sing-box check`.
+
 ### Not Implemented Yet
 
 - Runtime gateway.
