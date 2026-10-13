@@ -6,10 +6,9 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
 from .generation import Generation, GenerationManager
-
+from .models import Node
+from .singbox import build_config
 
 @dataclass(slots=True)
 class RunningGeneration:
@@ -32,7 +31,28 @@ class SingBoxEngine:
         self.root.mkdir(parents=True, exist_ok=True)
         self.manager = GenerationManager()
         self._next_generation = 0
+        self._active_node_signature: tuple[tuple[object, ...], ...] | None = None
         self._running: dict[str, RunningGeneration] = {}
+    async def apply_nodes(self, nodes: list[Node]) -> Generation:
+        """Publish a generation only when node connection parameters changed."""
+        if not nodes:
+            raise ValueError("at least one node is required")
+        signature = tuple(
+            (
+                node.id, node.protocol, node.server, node.port, node.uuid,
+                node.tls, node.sni, node.transport_type, node.path, node.host,
+            )
+            for node in sorted(nodes, key=lambda item: item.id)
+        )
+        if signature == self._active_node_signature and self.manager.active is not None:
+            return self.manager.active
+        config = build_config(nodes, listen_port=self.base_port)
+        previous = self.manager.active
+        generation = await self.start_generation(config)
+        self._active_node_signature = signature
+        if previous is not None and previous is not generation:
+            await self.stop_generation(previous)
+        return generation
 
     async def start_generation(self, config: dict[str, Any]) -> Generation:
         if shutil.which(self.binary) is None:

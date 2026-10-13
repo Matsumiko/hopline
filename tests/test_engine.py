@@ -46,6 +46,29 @@ class SingBoxEngineTests(unittest.TestCase):
         asyncio.run(scenario())
 
     @unittest.skipUnless(shutil.which("sing-box"), "sing-box is required")
+    def test_apply_nodes_reuses_generation_for_same_parameters(self) -> None:
+        async def scenario() -> None:
+            from hopline.models import Node
+
+            engine = SingBoxEngine(base_port=18973)
+            node = Node(
+                id="node-a",
+                protocol="vless",
+                server="127.0.0.1",
+                port=443,
+                uuid="00000000-0000-4000-8000-000000000001",
+            )
+            try:
+                first = await engine.apply_nodes([node])
+                second = await engine.apply_nodes([node])
+                self.assertIs(first, second)
+                self.assertIs(engine.manager.active, first)
+            finally:
+                await engine.close()
+
+        asyncio.run(scenario())
+
+    @unittest.skipUnless(shutil.which("sing-box"), "sing-box is required")
     def test_gateway_reaches_local_target_through_generation(self) -> None:
         async def scenario() -> None:
             async def target(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

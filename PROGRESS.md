@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, VLESS parser, dan config generator tersedia; subscription sync/SQLite/CLI belum tersedia.
-- **Last verified:** test suite F1 dan smoke integration lokal lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, VLESS parser, config generator, bounded Syncer snapshot, dan SQLite registry tersedia; HTTP subscription fetch/CLI belum tersedia.
+- **Last verified:** test suite F1 dan sync→SQLite→generation integration lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,15 +26,15 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan subscription sync, SQLite registry, dan CLI setelah kontrak runtime dasar stabil.
+- Melanjutkan Fase 1 dengan HTTP subscription fetch, SQLite migration policy, dan CLI setelah kontrak snapshot runtime stabil.
 
 ## Berikutnya
 
-1. Tambahkan parser fixture untuk Clash/sing-box JSON tanpa credential live.
-2. Tambahkan SQLite registry dan sync snapshot valid terakhir.
-3. Integrasikan Syncer ke SingBoxEngine generation publish.
+1. Tambahkan HTTP fetch dengan timeout, ETag/If-Modified-Since, dan last-valid body.
+2. Tambahkan parser fixture untuk Clash/sing-box JSON tanpa credential live.
+3. Tambahkan removed hysteresis setelah tiga sync berturut-turut.
 4. Tambahkan CLI `hopline test` dan `hopline doctor`.
-5. Uji Gate F1 end-to-end dengan fixture subscription offline.
+5. Uji Gate F1 end-to-end dengan fixture subscription offline dan environment proxy.
 
 ## Bukti
 
@@ -61,14 +61,16 @@ F1 test suite:
 ```text
 python3 -m py_compile hopline/*.py tests/*.py
 python3 -W error::ResourceWarning -m unittest discover -s tests -v
-Ran 8 tests — OK
+Ran 14 tests — OK
 ```
+
+Sync integration mencakup base64/VLESS snapshot, invalid-entry isolation, dedup lintas source, valid registry fallback, no-op snapshot, dan `Syncer.sync_text_and_apply()` yang mempertahankan generation sama saat parameter node tidak berubah.
 
 Smoke config: `python3 -m tools.smoke_config` menghasilkan `config-generator=passed sing-box-check=passed secret=fixture-only`.
 
 Integration mencakup Gateway → sing-box → target HTTP lokal, upstream Basic Auth, rotate, generation publish, drain, dan active relay setelah listener stop.
 
-Gate F1: **in progress**. Runtime vertical slice dasar lulus; subscription sync, SQLite registry, CLI, dan acceptance melalui `HTTPS_PROXY` belum selesai.
+Gate F1: **in progress**. Runtime dan snapshot vertical slice lulus; HTTP subscription fetch, Clash/sing-box JSON, SQLite migration policy, CLI, dan acceptance melalui `HTTPS_PROXY` belum selesai.
 
 ## Validasi Dokumentasi Baseline
 
@@ -82,7 +84,7 @@ Gate F1: **in progress**. Runtime vertical slice dasar lulus; subscription sync,
 | Item | Status | Dampak | Cara membuka |
 |---|---|---|---|
 | Reload SIGHUP sing-box 1.14.3 menutup stream aktif | mitigated | In-place reload melanggar invariant active stream | Gunakan generation subprocess/listener berbeda; jangan SIGHUP saat stream aktif |
-| Subscription sync dan SQLite registry belum tersedia | open | F1 belum end-to-end dari URL subscription | Implementasikan snapshot sync offline |
+| HTTP subscription fetch belum tersedia | open | F1 belum mengambil URL subscription | Implementasikan timeout, cache body valid, dan conditional request |
 | Batas koneksi aktif per node belum ditetapkan | deferred | Parameter operasi belum final | Load test F4 |
 | Target provider probe belum dipilih | deferred | Active probe F2 belum memiliki target final | Putuskan sebelum F2 |
 

@@ -44,6 +44,16 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Delapan test F1 lulus tanpa `ResourceWarning`.
 - Generated config fixture lulus `sing-box check`.
 
+### Added
+
+- `SQLiteRegistry` untuk metadata schema, subscription source, deduplicated nodes, dan node-source ownership.
+- `Syncer` untuk bounded VLESS snapshot text/base64, invalid-entry isolation, stable snapshot detection, dan fallback ke node registry valid terakhir.
+- `SingBoxEngine.apply_nodes()` dan `Syncer.sync_text_and_apply()` untuk generation publish hanya saat parameter node berubah.
+
+### Verified
+
+- Empat belas test F1 lulus tanpa `ResourceWarning`, termasuk sync snapshot → SQLite → sing-box generation dan no-op sync tanpa generation reload.
+
 ### Not Implemented Yet
 
 - Runtime gateway.
