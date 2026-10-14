@@ -6,6 +6,7 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 ### Added
 - Gateway sekarang mewajibkan credential lokal `[auth]` sebelum memilih node. Username client (`hopline` secara default) dan password lokal tidak diteruskan ke sing-box; credential node tetap internal. Smoke ephemeral memverifikasi credential benar, salah, dan kosong.
+- Production deployment verified for local Gateway auth on the authorized Debian 12 VPS: commit `70c6cb7` active, `[auth]` config private, valid credential returned CONNECT `200`, and wrong/missing credentials returned `407`. Control status reported four healthy nodes and the authenticated egress smoke returned HTTP `200`.
 
 - Baseline dokumentasi proyek: `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `PROGRESS.md`, `CONTRIBUTING.md`, `SECURITY.md`, dan `AGENTS.md`.
 - Indeks keputusan arsitektur di `docs/adr/`.

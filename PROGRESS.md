@@ -94,7 +94,8 @@ DNS audit: generation config now declares `dns-local` as the default resolver an
 Local Gateway auth: `[auth]` username/password sekarang wajib, client memakai credential lokal, dan Gateway tidak lagi menerima password node sebagai autentikasi client. Wrong/missing credentials menghasilkan 407; local auth diteruskan sebagai credential terpisah dari credential node.
 Verification: 51 regression tests tanpa daemon control-port collision lulus; `PYTHONPATH=. python3 tools/smoke_ephemeral.py --fixture-dir . --timeout 20` lulus untuk VLESS, VMess, Trojan, dan Shadowsocks dengan authenticated HTTP 200 serta wrong/missing local credential HTTP 407. Production service tidak disentuh.
 Daemon tests yang menjalankan control listener tidak dapat dijalankan pada workspace ini karena `127.0.0.1:18772` sedang dipakai service production; ini environment collision, bukan failure assertion auth.
-
+Production auth rollout (VPS target dari `.env`, Debian 12): commit `70c6cb7` staged ke `/opt/hopline/app`, config backup dibuat dengan mode `0600`, `[auth]` diterapkan atomik, dan `hopline.service` restart tetap active. Rollback app tree dan config backup dipertahankan.
+Production verification: gateway raw CONNECT valid local credential `200`, wrong password `407`, missing credential `407`; control `/status` melaporkan 4 healthy nodes; metrics `200`; authenticated `curl https://api.ipify.org?format=json` returned `200`. Password tidak dicatat.
 ## Blocker / Risiko Aktif
 
 | VLESS/VMess export masih timeout | open | Parser/generator sekarang mempertahankan WS/TLS, SNI, host, path, VLESS `packet_encoding`, VMess `alter_id`; config lulus `sing-box check`, tetapi sampel egress tetap gagal | Bandingkan parameter node yang sama dengan export NekoBox lengkap dan ambil trace handshake sing-box |
