@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; active probe scheduler belum tersedia.
-- **Last verified:** 34 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, control API smoke, dan pre-byte failover regression lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; provider-specific probe semantics dan HTTPS_PROXY acceptance belum selesai.
+- **Last verified:** 37 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, control API smoke, pre-byte failover regression, dan active probe cancellation lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,13 +26,13 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan active probe scheduler dan control-plane hardening.
+- Melanjutkan Fase 1 dengan load test dan end-to-end acceptance.
 
 ## Berikutnya
 
-1. Tambahkan active probe scheduler dengan target konfigurasi.
-2. Tambahkan load test untuk batas koneksi aktif per node.
-3. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
+1. Tambahkan load test untuk batas koneksi aktif per node.
+2. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
+3. Putuskan target provider probe dan semantics HTTP melalui node.
 4. Siapkan systemd install/runbook setelah review service host.
 
 ## Bukti
@@ -57,14 +57,15 @@ Observed: `generation_swap=passed active_stream_preserved=passed new_connections
 
 F1 test suite:
 ```text
-
 python3 -W error::ResourceWarning -m unittest discover -s tests -v
-Ran 34 tests — OK
+Ran 37 tests — OK
 ```
 
 Health/control integration mencakup passive success/failure transitions, active probe seam, SQLite health persistence, localhost-only `/status` dan `/nodes`, CLI `status`/`nodes`, dan response redaction.
 
 Picker/failover integration mencakup skip `dead`/`quarantine`, feedback passive dari CONNECT, retry kandidat berikutnya saat upstream gagal sebelum `200`, dan larangan retry setelah relay dimulai.
+
+Active probe integration mencakup `[health]` target/interval/timeout configuration, target validation tanpa credential, per-node timeout/error persistence, scheduler cancellation, dan daemon lifecycle wiring.
 
 Sync integration mencakup base64/share-link, Clash YAML, sing-box JSON, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, removed hysteresis tiga sync, scheduler sync, CLI contract, persistent TOML permission validation, daemon once, dan generation apply.
 
@@ -74,7 +75,7 @@ Control smoke: `/status` menghasilkan JSON `nodes=1`, `schema_version=1`, tanpa 
 
 Failover smoke: node pertama menerima `502`, node kedua menerima CONNECT, client menerima satu `200` setelah kandidat kedua siap.
 
-Gate F1: **in progress**. Health-aware picker/failover, registry, dan control API dasar lulus; active probe scheduler, acceptance melalui `HTTPS_PROXY`, dan host installation runbook belum selesai.
+Gate F1: **in progress**. Health-aware picker/failover, registry, control API, dan active probe scheduler lulus; load boundary, provider-specific probe semantics, acceptance melalui `HTTPS_PROXY`, dan host installation runbook belum selesai.
 
 ## Validasi Dokumentasi Baseline
 
@@ -86,8 +87,7 @@ Gate F1: **in progress**. Health-aware picker/failover, registry, dan control AP
 ## Blocker / Risiko Aktif
 
 | Item | Status | Dampak | Cara membuka |
-|---|---|---|---|
-| Active probe scheduler belum tersedia | open | Health state belum diperbarui periodik tanpa traffic client | Tambahkan scheduler dengan target probe terkonfigurasi |
+| Active probe provider semantics belum dipilih | deferred | Default probe saat ini memeriksa TCP endpoint node; target URL menjadi policy metadata | Tetapkan HTTP CONNECT/HTTP response contract sebelum provider probe production |
 | Batas koneksi aktif per node belum ditetapkan | deferred | Parameter operasi belum final | Load test F4 |
 | Target provider probe belum dipilih | deferred | Active probe F2 belum memiliki target final | Putuskan sebelum F2 |
 

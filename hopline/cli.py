@@ -29,7 +29,7 @@ def _parser() -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", help="Check local Hopline prerequisites")
     doctor.add_argument("--db", default=DEFAULT_DB, help="SQLite registry path")
     doctor.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
-    for name, path in (("status", "/status"), ("nodes", "/nodes")):
+    for name in ("status", "nodes"):
         sub = subparsers.add_parser(name, help=f"Read control API {name}")
         sub.add_argument("--host", default="127.0.0.1")
         sub.add_argument("--port", type=int, default=18772)
@@ -96,25 +96,48 @@ async def _control_request(host: str, port: int, path: str) -> dict[str, object]
 
 async def _run_daemon(config_path: str, once: bool) -> int:
     from .control import ControlServer
+    from .health import HealthChecker
+    from .probe import ActiveProbeScheduler
 
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
     scheduler = SubscriptionScheduler(Syncer(registry), config.subscriptions, interval=config.interval, jitter=config.jitter)
+    probe_scheduler = None
+    probe_task = None
+    if config.probe_targets:
+        probe_scheduler = ActiveProbeScheduler(
+            HealthChecker(registry), registry.list_nodes, config.probe_targets,
+            interval=config.probe_interval, timeout=config.probe_timeout,
+        )
+        probe_task = asyncio.create_task(probe_scheduler.run())
     control = ControlServer(registry)
     await control.start()
     loop = asyncio.get_running_loop()
+
+    def stop_all() -> None:
+        scheduler.stop()
+        if probe_scheduler is not None:
+            probe_scheduler.stop()
+
     for signal_name in ("SIGINT", "SIGTERM"):
         signal_number = getattr(signal, signal_name, None)
         if signal_number is not None:
-            loop.add_signal_handler(signal_number, scheduler.stop)
+            loop.add_signal_handler(signal_number, stop_all)
     try:
         if once:
             results = await scheduler.sync_once()
-            print(json.dumps({"sources": len(results), "nodes": len(registry.list_nodes()), "control_port": control.port, "once": True}, sort_keys=True))
+            if probe_scheduler is not None:
+                await probe_scheduler.probe_once()
+            print(json.dumps({"sources": len(results), "nodes": len(registry.list_nodes()), "probes": len(probe_scheduler.targets) if probe_scheduler else 0, "control_port": control.port, "once": True}, sort_keys=True))
             return 0 if results and registry.list_nodes() else 2
         await scheduler.run()
         return 0
     finally:
+        if probe_scheduler is not None:
+            probe_scheduler.stop()
+        if probe_task is not None:
+            probe_task.cancel()
+            await asyncio.gather(probe_task, return_exceptions=True)
         await control.stop()
         registry.close()
 

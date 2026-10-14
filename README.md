@@ -91,6 +91,17 @@ Health state dasar: `healthy`, `degraded`, `dead`, dan `quarantine`. Response ha
 
 Gateway memilih node `healthy` atau `degraded`; node `dead` dan `quarantine` dilewati. Jika CONNECT ke node gagal atau upstream menolak sebelum respons `200`, gateway mencoba kandidat berikutnya. Hopline baru mengirim `200 Connection Established` setelah upstream berhasil, sehingga retry tidak terjadi setelah byte client diteruskan.
 
+Active probe opsional dikonfigurasi tanpa credential:
+
+```toml
+[health]
+targets = ["https://provider.example/health"]
+interval = 300
+timeout = 5
+```
+
+Daemon menjalankan probe berkala terhadap endpoint node dan menyimpan hasilnya di health registry. `targets` adalah target kebijakan yang tervalidasi dan tidak boleh berisi username, password, atau fragment. Probe tidak mencetak URL atau credential ke output.
+
 ## Batasan
 
 - Bukan VPN level jaringan.

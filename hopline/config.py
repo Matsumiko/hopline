@@ -14,6 +14,9 @@ class HoplineConfig:
     subscriptions: tuple[str, ...]
     interval: float = 45 * 60
     jitter: float = 0
+    probe_targets: tuple[str, ...] = ()
+    probe_interval: float = 5 * 60
+    probe_timeout: float = 5
 
     @classmethod
     def from_file(cls, path: str | Path) -> "HoplineConfig":
@@ -47,9 +50,36 @@ class HoplineConfig:
             urls.append(url)
         if not urls:
             raise ValueError("at least one subscription URL is required")
+        health = document.get("health", {})
+        if not isinstance(health, dict):
+            raise ValueError("[health] section must be a table")
+        raw_targets = health.get("targets", [])
+        if not isinstance(raw_targets, list):
+            raise ValueError("health.targets must be an array")
+        targets: list[str] = []
+        for raw_target in raw_targets:
+            target = str(raw_target)
+            parsed_target = urlsplit(target)
+            if parsed_target.scheme not in {"http", "https"} or not parsed_target.hostname:
+                raise ValueError("health probe target must be an HTTP(S) URL")
+            if parsed_target.username or parsed_target.password or parsed_target.fragment:
+                raise ValueError("health probe target must not contain credentials or fragments")
+            targets.append(target)
+        probe_interval = float(health.get("interval", 5 * 60))
+        probe_timeout = float(health.get("timeout", 5))
         if interval <= 0 or jitter < 0 or jitter >= interval:
             raise ValueError("interval and jitter are invalid")
-        return cls(database=database, subscriptions=tuple(urls), interval=interval, jitter=jitter)
+        if probe_interval <= 0 or probe_timeout <= 0 or probe_timeout > probe_interval:
+            raise ValueError("health probe interval and timeout are invalid")
+        return cls(
+            database=database,
+            subscriptions=tuple(urls),
+            interval=interval,
+            jitter=jitter,
+            probe_targets=tuple(targets),
+            probe_interval=probe_interval,
+            probe_timeout=probe_timeout,
+        )
 
     @classmethod
     def from_environment(cls) -> "HoplineConfig":

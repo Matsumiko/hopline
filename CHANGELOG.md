@@ -125,4 +125,15 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 ### Verified
 
 - 34 test lulus tanpa `ResourceWarning`.
+
+### Added
+
+- Konfigurasi `[health]` untuk target, interval, dan timeout active probe.
+- `ActiveProbeScheduler` dengan timeout per node, cancellation, dan persistence ke SQLite health registry.
+- Daemon `run` menjalankan probe berkala atau sekali pada mode `--once` jika target dikonfigurasi.
+
+### Verified
+
+- 37 test lulus tanpa `ResourceWarning`.
+- Probe success, failure, timeout seam, dan graceful cancellation teruji.
 - Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.
