@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, multi-protocol parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry, scheduler, dan CLI tersedia; health/control plane belum tersedia.
-- **Last verified:** test suite F1, live subscription sync 100 node, config check, dan CLI contract lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, multi-protocol parser, structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, dan CLI tersedia; health/control plane belum tersedia.
+- **Last verified:** 26 test F1, live subscription sync 100 node, config check, dan CLI contract lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,14 +26,14 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan parser Clash/sing-box, removed hysteresis, dan scheduler production lifecycle.
+- Melanjutkan Fase 1 dengan scheduler production lifecycle, systemd packaging, dan control-plane groundwork.
 
 ## Berikutnya
 
-1. Tambahkan parser fixture untuk Clash/sing-box JSON tanpa credential live.
-2. Tambahkan removed hysteresis setelah tiga sync berturut-turut.
-3. Tambahkan konfigurasi scheduler persisten dan systemd packaging.
-4. Tambahkan CLI `hopline nodes` dan `hopline status` setelah control API tersedia.
+1. Tambahkan systemd packaging dan konfigurasi scheduler persisten.
+2. Tambahkan health checker passive/active setelah node registry stabil.
+3. Tambahkan control API dan CLI `nodes`/`status`.
+4. Tambahkan load test untuk batas koneksi aktif per node.
 5. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
 
 ## Bukti
@@ -61,20 +61,18 @@ F1 test suite:
 ```text
 python3 -m py_compile hopline/*.py tests/*.py
 python3 -W error::ResourceWarning -m unittest discover -s tests -v
-Ran 23 tests — OK
+Ran 26 tests — OK
 ```
 
-Sync integration mencakup base64/share-link snapshot, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, redacted headers, scheduler sync, CLI contract, dan generation apply.
+Sync integration mencakup base64/share-link, Clash YAML, sing-box JSON, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, redacted headers, removed hysteresis tiga sync, scheduler sync, CLI contract, dan generation apply.
 
-Live subscription smoke dilakukan ephemeral dengan URL yang diberikan: `parsed=100`, `invalid=0`, protokol `ss/trojan/vless/vmess`, body tidak dicetak dan tidak disimpan ke repository.
+Live subscription smoke: `parsed=100`, `invalid=0`, protokol `ss/trojan/vless/vmess`; body tidak dicetak dan tidak disimpan ke repository.
 
-Generated config untuk 100 node subscription lulus `sing-box check`.
+Generated config 100 node lulus `sing-box check`.
 
-CLI smoke lulus: help semua command, `doctor --json`, `sync --json` live, missing URL error pada stderr, dan live doctor dengan 100 node.
+CLI smoke lulus: help command, `doctor --json`, `sync --json` live, missing URL error pada stderr, dan live doctor dengan 100 node.
 
-Smoke config: `python3 -m tools.smoke_config` menghasilkan `config-generator=passed sing-box-check=passed secret=fixture-only`.
-
-Gate F1: **in progress**. Runtime, HTTP fetch, snapshot, scheduler dasar, dan CLI lulus; Clash/sing-box JSON, removed hysteresis, scheduler production lifecycle, health/control plane, dan acceptance melalui `HTTPS_PROXY` belum selesai.
+Gate F1: **in progress**. Runtime, HTTP fetch, snapshot, structured parser, hysteresis, scheduler dasar, dan CLI lulus; scheduler production lifecycle, health/control plane, systemd packaging, dan acceptance melalui `HTTPS_PROXY` belum selesai.
 
 ## Validasi Dokumentasi Baseline
 

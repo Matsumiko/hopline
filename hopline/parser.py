@@ -96,3 +96,78 @@ def parse_vless(link: str, *, source: str | None = None) -> Node:
     if node.protocol != "vless":
         raise ValueError("unsupported share-link protocol")
     return node
+
+def parse_structured_subscription(body: bytes, *, source: str | None = None) -> list[Node]:
+    """Parse sing-box JSON or Clash YAML without exposing credentials."""
+    import json
+
+    try:
+        document = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        try:
+            import yaml
+        except ImportError as exc:
+            raise ValueError("Clash YAML requires PyYAML") from exc
+        try:
+            document = yaml.safe_load(body.decode("utf-8"))
+        except (UnicodeDecodeError, yaml.YAMLError) as exc:
+            raise ValueError("structured subscription is invalid") from exc
+    if not isinstance(document, dict):
+        raise ValueError("structured subscription must be an object")
+    entries = document.get("outbounds") or document.get("proxies")
+    if not isinstance(entries, list):
+        raise ValueError("structured subscription has no outbounds or proxies")
+    nodes: list[Node] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            node = _parse_structured_node(entry, source=source)
+        except (TypeError, ValueError, KeyError):
+            continue
+        if node is not None:
+            nodes.append(node)
+    return nodes
+
+
+def _parse_structured_node(entry: dict[str, object], *, source: str | None) -> Node | None:
+    protocol = str(entry.get("type", "")).lower()
+    if protocol == "shadowsocks":
+        protocol = "ss"
+    if protocol not in {"vless", "vmess", "trojan", "ss"}:
+        return None
+    server = str(entry["server"])
+    port = int(entry.get("server_port", entry.get("port")))
+    if not server or not 1 <= port <= 65535:
+        raise ValueError("structured node host or port is invalid")
+    credential = str(entry.get("uuid", entry.get("password", "")))
+    method = str(entry.get("method", entry.get("cipher", ""))) or None
+    if not credential:
+        raise ValueError("structured node credential is missing")
+    tls_data = entry.get("tls")
+    tls = bool(tls_data) if isinstance(tls_data, bool) else bool(isinstance(tls_data, dict) and tls_data.get("enabled"))
+    sni = str(entry.get("servername", entry.get("server_name", server)))
+    if isinstance(tls_data, dict):
+        sni = str(tls_data.get("server_name", sni))
+    transport_data = entry.get("transport")
+    ws_data = entry.get("ws-opts")
+    transport_type = str(entry.get("network", "tcp"))
+    path = None
+    host = None
+    if isinstance(transport_data, dict):
+        transport_type = str(transport_data.get("type", transport_type))
+        path = transport_data.get("path")
+        headers = transport_data.get("headers")
+        host = headers.get("Host") if isinstance(headers, dict) else None
+    if isinstance(ws_data, dict):
+        transport_type = "ws"
+        path = ws_data.get("path")
+        headers = ws_data.get("headers")
+        host = headers.get("Host") if isinstance(headers, dict) else host
+    name = str(entry.get("tag", entry.get("name", ""))) or None
+    return Node(
+        id=_node_id(protocol, server, port, credential, "tls" if tls else "none", sni, transport_type, str(path) if path else None, str(host) if host else None, method),
+        protocol=protocol, server=server, port=port, uuid=credential, tls=tls,
+        sni=sni, transport_type=transport_type, path=str(path) if path else None,
+        host=str(host) if host else None, method=method, name=name,
+    )

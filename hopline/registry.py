@@ -49,6 +49,12 @@ class SQLiteRegistry:
                 source TEXT NOT NULL REFERENCES subscriptions(source) ON DELETE CASCADE,
                 PRIMARY KEY(node_id, source)
             );
+            CREATE TABLE IF NOT EXISTS node_removals (
+                node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                source TEXT NOT NULL REFERENCES subscriptions(source) ON DELETE CASCADE,
+                missing_syncs INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(node_id, source)
+            );
             """
         )
         self._ensure_columns()
@@ -136,17 +142,32 @@ class SQLiteRegistry:
                     "INSERT OR IGNORE INTO node_sources(node_id, source) VALUES (?, ?)",
                     (node.id, source),
                 )
-            if old_ids:
-                placeholders = ",".join("?" for _ in old_ids)
-                self.connection.execute(
-                    f"DELETE FROM node_sources WHERE source = ? AND node_id IN ({placeholders})",
-                    (source, *old_ids),
-                )
-                for node_id in incoming:
+            for node_id in old_ids - incoming.keys():
+                row = self.connection.execute(
+                    "SELECT missing_syncs FROM node_removals WHERE node_id = ? AND source = ?",
+                    (node_id, source),
+                ).fetchone()
+                missing = (row[0] if row else 0) + 1
+                if missing >= 3:
                     self.connection.execute(
-                        "INSERT OR IGNORE INTO node_sources(node_id, source) VALUES (?, ?)",
+                        "DELETE FROM node_sources WHERE node_id = ? AND source = ?",
                         (node_id, source),
                     )
+                    self.connection.execute(
+                        "DELETE FROM node_removals WHERE node_id = ? AND source = ?",
+                        (node_id, source),
+                    )
+                else:
+                    self.connection.execute(
+                        "INSERT INTO node_removals(node_id, source, missing_syncs) VALUES (?, ?, ?) "
+                        "ON CONFLICT(node_id, source) DO UPDATE SET missing_syncs=excluded.missing_syncs",
+                        (node_id, source, missing),
+                    )
+            for node_id in incoming:
+                self.connection.execute(
+                    "DELETE FROM node_removals WHERE node_id = ? AND source = ?",
+                    (node_id, source),
+                )
             self.connection.execute(
                 "DELETE FROM nodes WHERE id NOT IN (SELECT node_id FROM node_sources)"
             )

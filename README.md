@@ -38,7 +38,7 @@ Hopline mengelola pemilihan, health, failover sebelum byte client diteruskan, si
 
 ## Status Saat Ini
 
-Package runtime tersedia di `hopline/`. Parser VLESS, Trojan, VMess, dan Shadowsocks, bounded subscription fetch, SQLite registry, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, node routing, drain, dan active-stream preservation sudah diuji offline. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
+Package runtime tersedia di `hopline/`. Parser share-link VLESS, Trojan, VMess, dan Shadowsocks, structured parser Clash YAML/sing-box JSON, bounded subscription fetch, SQLite registry dengan removed hysteresis tiga sync, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, node routing, drain, scheduler dasar, dan CLI sudah diuji. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
 
 ## CLI
 

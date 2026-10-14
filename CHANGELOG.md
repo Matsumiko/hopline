@@ -81,5 +81,15 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 ### Not Implemented Yet
 
 - Health checker, scorer, picker, dan Control API.
-- Parser Clash YAML dan sing-box JSON.
 - Scheduler production lifecycle dan systemd packaging.
+
+### Added
+
+- Structured subscription parser untuk Clash YAML dan sing-box JSON.
+- Removed hysteresis per subscription source: node baru dihapus setelah tiga snapshot berturut-turut tidak memuat node tersebut.
+
+### Verified
+
+- Dua puluh enam test lulus tanpa `ResourceWarning`.
+- Fixture Clash YAML dan sing-box JSON berhasil diparse; node invalid diabaikan.
+- Hysteresis mempertahankan node pada sync pertama/kedua dan menghapusnya setelah sync ketiga.

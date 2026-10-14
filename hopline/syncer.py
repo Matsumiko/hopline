@@ -9,8 +9,7 @@ from dataclasses import dataclass
 from .engine import SingBoxEngine
 from .fetcher import SubscriptionFetcher
 from .generation import Generation
-from .models import Node
-from .parser import parse_share_link
+from .parser import parse_share_link, parse_structured_subscription
 from .registry import SQLiteRegistry
 
 
@@ -51,9 +50,18 @@ class Syncer:
     ) -> SyncResult:
         if len(body) > self.max_body_bytes:
             raise ValueError("subscription body exceeds configured limit")
-        entries = self._decode_entries(body)
-        nodes: dict[str, Node] = {}
-        invalid = 0
+        try:
+            structured = parse_structured_subscription(body, source=source)
+        except ValueError:
+            structured = []
+        if structured:
+            nodes = {node.id: node for node in structured[: self.max_nodes]}
+            invalid = max(0, len(structured) - len(nodes))
+            entries: list[str] = []
+        else:
+            entries = self._decode_entries(body)
+            nodes = {}
+            invalid = 0
         for entry in entries:
             if len(nodes) >= self.max_nodes:
                 break
