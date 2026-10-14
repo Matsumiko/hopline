@@ -12,7 +12,7 @@ Treating every test as a periodic health probe would increase bandwidth usage, c
 
 ## Decision
 
-Hopline's periodic `ActiveProbeScheduler` uses only a bounded HTTP/URL probe per node. The probe must traverse the node's authenticated sing-box outbound and must satisfy Hopline's explicit HTTP success policy (`200..399` for the current implementation) within the configured timeout. Latency is recorded independently from health state.
+Hopline's periodic `ActiveProbeScheduler` uses only a bounded HTTP/URL probe per node. The probe must traverse the node's authenticated sing-box outbound, complete CONNECT, and receive a syntactically valid HTTP status line within the configured timeout. The target status is diagnostic output, not a liveness filter: any completed numeric HTTP response is transport-successful. Latency is recorded independently from health state.
 
 The following remain diagnostic modes and are not scheduled periodically:
 
@@ -39,8 +39,7 @@ Rejected. They consume bandwidth, rely on external server discovery, and measure
 Rejected. The reported country belongs to the selected test server metadata, not necessarily the node's egress IP.
 
 ### Treat any HTTP response as healthy
-
-Rejected. Authentication pages and provider errors can be transport-successful but operationally unusable. Hopline requires a bounded expected status policy.
+Accepted for periodic liveness. A completed target response proves that the proxy tunnel and target exchange completed; target semantics belong to a separate diagnostic. CONNECT rejection, timeout, malformed response, and TLS/relay errors remain unhealthy.
 
 ## Consequences
 

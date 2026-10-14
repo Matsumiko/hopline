@@ -5,6 +5,8 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 ## [Unreleased]
 
 ### Added
+- Menyamakan active HTTP probe dengan semantik 9router: CONNECT harus berhasil dan response target harus selesai dengan status HTTP numerik apa pun; target `4xx/5xx` tidak lagi menjadi false-negative health, sedangkan timeout, TLS, malformed response, dan CONNECT rejection tetap gagal. Menambahkan regression coverage.
+- Parser Trojan sekarang mempertahankan password provider arbitrary dan tidak lagi memaksa format UUID; outbound generator meneruskan password tersebut ke sing-box.
 - Full suite terbaru menjalankan 87 test tanpa `ResourceWarning`; smoke ephemeral menguji VLESS, VMess, Trojan, dan Shadowsocks dengan authenticated HTTP 200 serta invalid/missing credential HTTP 407 tanpa menyentuh service production. Load smoke menghasilkan 4 koneksi diterima dan 12 ditolak dari 16 concurrent; HTTPS proxy acceptance mengembalikan payload `pong`.
 - Gateway sekarang mewajibkan credential lokal `[auth]` sebelum memilih node. Username client (`hopline` secara default) dan password lokal tidak diteruskan ke sing-box; credential node tetap internal. Smoke ephemeral memverifikasi credential benar, salah, dan kosong.
 - Memperbaiki collision port multi-generation: sing-box generation sekarang melewati gateway/control/metrics port, dan HTTP active probe memakai port generation aktif. Target production probe diganti ke `http://cp.cloudflare.com/`.

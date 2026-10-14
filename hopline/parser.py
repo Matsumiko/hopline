@@ -176,12 +176,17 @@ def parse_share_link(link: str, *, source: str | None = None) -> Node:
         except (binascii.Error, UnicodeError, ValueError) as exc:
             raise ValueError("Shadowsocks credentials are invalid") from exc
     else:
-        if not parsed.username:
-            raise ValueError(f"{protocol.upper()} link requires UUID")
-        try:
-            credential = str(UUID(unquote(parsed.username)))
-        except ValueError as exc:
-            raise ValueError(f"{protocol.upper()} UUID is invalid") from exc
+        if protocol == "trojan":
+            credential = unquote(parsed.username or parsed.path.lstrip("/"))
+            if not credential:
+                raise ValueError("TROJAN link requires password")
+        else:
+            if not parsed.username:
+                raise ValueError(f"{protocol.upper()} link requires UUID")
+            try:
+                credential = str(UUID(unquote(parsed.username)))
+            except ValueError as exc:
+                raise ValueError(f"{protocol.upper()} UUID is invalid") from exc
     tls = security in {"tls", "reality"} or protocol == "trojan"
     node_id = _node_id(
         protocol, parsed.hostname, parsed.port, credential, security, sni,

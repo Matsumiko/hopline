@@ -70,7 +70,7 @@ async def http_connect_probe(
         await writer.drain()
         status_line = await reader.readline()
         parts = status_line.split(b" ", 2)
-        return len(parts) >= 2 and parts[1].isdigit() and 200 <= int(parts[1]) < 400
+        return len(parts) >= 2 and parts[1].isdigit()
     finally:
         writer.close()
         await writer.wait_closed()

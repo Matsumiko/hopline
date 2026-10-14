@@ -143,7 +143,7 @@ proxy_host = "127.0.0.1"
 proxy_port = 18771
 ```
 
-Mode `http` membuka CONNECT ke mixed inbound sing-box dengan auth user node, lalu meminta target melalui tunnel dan menerima status HTTP `2xx`–`3xx` sebagai sehat. Mode `tcp` tetap tersedia sebagai default. Service systemd hanya perlu akses jaringan keluar dan membaca config private; port control tetap localhost.
+Mode `http` membuka CONNECT ke mixed inbound sing-box dengan auth user node, lalu meminta target melalui tunnel. CONNECT harus berhasil dan response target harus selesai dengan status HTTP numerik apa pun; status target tidak dinilai sebagai kesehatan provider. Timeout, gagal CONNECT, TLS, atau relay tetap gagal. Mode `tcp` tetap tersedia sebagai default. Service systemd hanya perlu akses jaringan keluar dan membaca config private; port control tetap localhost.
 
 Untuk Shadowsocks dengan `v2ray-plugin`, Hopline meneruskan opsi plugin ke sing-box. Ini diperlukan untuk node WS/TLS seperti export Nekobox; tanpa field tersebut, node terlihat sehat pada TCP tetapi gagal saat handshake protocol.
 

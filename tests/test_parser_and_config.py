@@ -25,6 +25,13 @@ class ParserConfigTests(unittest.TestCase):
         self.assertEqual(node.name, "Japan edge")
         self.assertEqual(len(node.id), 12)
         self.assertEqual(node.id, parse_vless(VLESS, source="other").id)
+    def test_trojan_preserves_non_uuid_password(self) -> None:
+        node = parse_share_link(
+            "trojan://provider-password@edge.example.test:443"
+            "?security=tls&type=ws&path=%2Fedge&sni=edge.example.test"
+        )
+        self.assertEqual(node.uuid, "provider-password")
+        self.assertEqual(build_config([node], listen_port=18771)["outbounds"][0]["password"], "provider-password")
     def test_vless_and_vmess_transport_metadata_reaches_singbox(self) -> None:
         vless = parse_vless(
             "vless://00000000-0000-4000-8000-000000000004@edge.example.test:443"
