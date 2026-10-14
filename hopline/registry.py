@@ -20,7 +20,7 @@ class SQLiteRegistry:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
-            INSERT OR IGNORE INTO metadata(key, value) VALUES ('schema_version', '1');
+            INSERT OR IGNORE INTO metadata(key, value) VALUES ('schema_version', '2');
             CREATE TABLE IF NOT EXISTS nodes (
                 id TEXT PRIMARY KEY,
                 protocol TEXT NOT NULL,
@@ -72,6 +72,16 @@ class SQLiteRegistry:
                 missing_syncs INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY(node_id, source)
             );
+            CREATE TABLE IF NOT EXISTS geolocation (
+                node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+                ip TEXT NOT NULL,
+                country_code TEXT NOT NULL,
+                country TEXT,
+                asn TEXT,
+                organization TEXT,
+                provider TEXT NOT NULL,
+                checked_at REAL NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS health (
                 node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
                 state TEXT NOT NULL,
@@ -120,6 +130,36 @@ class SQLiteRegistry:
         for name, definition in (("body", "BLOB"), ("etag", "TEXT"), ("last_modified", "TEXT")):
             if name not in tables["subscriptions"]:
                 self.connection.execute(f"ALTER TABLE subscriptions ADD COLUMN {name} {definition}")
+        if self.schema_version() < 2:
+            self.connection.execute("UPDATE metadata SET value = '2' WHERE key = 'schema_version'")
+    def geolocation_record(self, node_id: str):
+        return self.connection.execute(
+            "SELECT node_id, ip, country_code, country, asn, organization, provider, checked_at "
+            "FROM geolocation WHERE node_id = ?",
+            (node_id,),
+        ).fetchone()
+
+    def save_geolocation(self, node_id: str, result) -> None:
+        with self.connection:
+            self.connection.execute(
+                """INSERT INTO geolocation(
+                    node_id, ip, country_code, country, asn, organization, provider, checked_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(node_id) DO UPDATE SET ip=excluded.ip,
+                country_code=excluded.country_code, country=excluded.country,
+                asn=excluded.asn, organization=excluded.organization,
+                provider=excluded.provider, checked_at=excluded.checked_at""",
+                (
+                    node_id, result.ip, result.country_code, result.country,
+                    result.asn, result.organization, result.provider, result.checked_at,
+                ),
+            )
+
+    def list_geolocation(self):
+        return self.connection.execute(
+            "SELECT node_id, ip, country_code, country, asn, organization, provider, checked_at "
+            "FROM geolocation ORDER BY node_id"
+        ).fetchall()
 
     def schema_version(self) -> int:
         row = self.connection.execute(

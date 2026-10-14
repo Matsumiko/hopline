@@ -135,7 +135,15 @@ Hopline mendefinisikan resolver `dns-direct` untuk hostname relay/node dan satu 
 
 ### Health probe dan diagnostic
 
-Active health Hopline memakai HTTP/URL probe ringan melalui node yang diuji. Full download, download-only, upload-only, country, dan simple-download bukan polling health; mode tersebut memerlukan diagnostic command terpisah karena biaya traffic dan interpretasinya berbeda. Country metadata dari server test bukan bukti negara IP keluar. Detail pemetaan source NekoBox ada di [`docs/research/nekobox-testing-modes.md`](docs/research/nekobox-testing-modes.md).
+Active health Hopline memakai HTTP/URL probe ringan melalui node yang diuji. Full download, download-only, upload-only, country, dan simple-download bukan polling health; mode tersebut memerlukan diagnostic command terpisah karena biaya traffic dan interpretasinya berbeda.
+
+### Diagnostic geolocation
+
+```text
+checkip.com → ip.cc → cekipsaya.com?action=lookup&target={ip}
+```
+
+`cekipsaya` dikirim dengan `Referer: https://cekipsaya.com/cek-ip-saya/`. Hasil disimpan terpisah dari health pada registry: IP, country code/name, ASN, organisasi, provider, dan timestamp. `resolved=false` tetap dapat diterima bila response memiliki IP dan country yang valid. Lookup wajib dijalankan melalui tunnel node yang diuji; lookup dari VPS hanya membuktikan IP VPS. Provider failure atau hasil stale tidak mengubah health node dan belum mengaktifkan `country-*` routing otomatis.
 
 `node-<id>` adalah forced routing: hanya node tersebut yang dicoba dan tidak ada fallback ke kandidat lain.
 

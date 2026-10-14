@@ -44,9 +44,11 @@ class ControlServer:
 
     def nodes(self) -> list[dict[str, Any]]:
         records = {record.node_id: record for record in self.registry.list_health()}
+        geolocation = {row["node_id"]: row for row in self.registry.list_geolocation()}
         result = []
         for node in self.registry.list_nodes():
             record = records.get(node.id)
+            geo = geolocation.get(node.id)
             result.append(
                 {
                     "id": node.id,
@@ -58,6 +60,18 @@ class ControlServer:
                     "successes": record.successes if record else 0,
                     "failures": record.failures if record else 0,
                     "latency_ms": record.latency_ms if record else None,
+                    "geolocation": (
+                        {
+                            "ip": geo["ip"],
+                            "country_code": geo["country_code"],
+                            "country": geo["country"],
+                            "asn": geo["asn"],
+                            "organization": geo["organization"],
+                            "provider": geo["provider"],
+                            "checked_at": geo["checked_at"],
+                        }
+                        if geo else None
+                    ),
                 }
             )
         return result

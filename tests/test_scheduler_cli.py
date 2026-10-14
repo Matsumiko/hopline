@@ -50,7 +50,7 @@ class SchedulerCliTests(unittest.TestCase):
             )
         self.assertIn(result.returncode, {0, 2})
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["schema_version"], 2)
         self.assertEqual(payload["nodes"], 0)
         self.assertNotIn("password", result.stdout.lower())
 

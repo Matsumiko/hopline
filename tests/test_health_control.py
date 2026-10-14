@@ -56,6 +56,29 @@ class HealthControlTests(unittest.TestCase):
         self.assertEqual(checker.record_success("a").state, HealthState.DEGRADED)
         self.assertEqual(checker.record_success("a").state, HealthState.HEALTHY)
 
+    def test_control_api_exposes_geo_metadata_without_credentials(self) -> None:
+        async def scenario() -> None:
+            registry = SQLiteRegistry(":memory:")
+            registry.replace_subscription("fixture", "hash", [Node("a", "vless", "a.test", 443, "secret-uuid")])
+            from hopline.geolocation import GeoResult
+            registry.save_geolocation("a", GeoResult("203.0.113.8", "ID", "Indonesia", "AS64500", "Example", "checkip", 10.0))
+            server = ControlServer(registry, port=0)
+            await server.start()
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                writer.write(b"GET /nodes HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                await writer.drain()
+                response = await reader.read()
+                payload = json.loads(response.split(b"\r\n\r\n", 1)[1])
+                self.assertEqual(payload["nodes"][0]["geolocation"]["country_code"], "ID")
+                self.assertNotIn("secret-uuid", response.decode())
+                writer.close()
+                await writer.wait_closed()
+            finally:
+                await server.stop()
+
+        asyncio.run(scenario())
+
     def test_control_api_returns_nodes_without_credentials(self) -> None:
         async def scenario() -> None:
             registry = SQLiteRegistry(":memory:")
