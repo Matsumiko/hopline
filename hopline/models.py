@@ -16,6 +16,11 @@ class Node:
     path: str | None = None
     host: str | None = None
     method: str | None = None
+    plugin: str | None = None
+    plugin_opts: str | None = None
+    security: str | None = None
+    global_padding: bool | None = None
+    authenticated_length: bool | None = None
     name: str | None = None
     @property
     def credential(self) -> str:

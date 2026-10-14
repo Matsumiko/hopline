@@ -40,6 +40,8 @@ Hopline mengelola pemilihan, health, failover sebelum byte client diteruskan, si
 
 Package runtime tersedia di `hopline/`. Parser share-link VLESS, Trojan, VMess, dan Shadowsocks, structured parser Clash YAML/sing-box JSON, bounded subscription fetch, SQLite registry dengan removed hysteresis tiga sync, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, node routing, drain, scheduler dasar, dan CLI sudah diuji. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
 
+Parser share-link dan generator sing-box mempertahankan transport WebSocket/TLS; Shadowsocks `v2ray-plugin` menyimpan `plugin` dan `plugin_opts`, sedangkan VMess mempertahankan `security`, `global_padding`, dan `authenticated_length`.
+
 ## CLI
 
 ```bash
@@ -110,6 +112,8 @@ proxy_port = 18771
 ```
 
 Mode `http` membuka CONNECT ke mixed inbound sing-box dengan auth user node, lalu meminta target melalui tunnel dan menerima status HTTP `2xx`–`3xx` sebagai sehat. Mode `tcp` tetap tersedia sebagai default. Service systemd hanya perlu akses jaringan keluar dan membaca config private; port control tetap localhost.
+
+Untuk Shadowsocks dengan `v2ray-plugin`, Hopline meneruskan opsi plugin ke sing-box. Ini diperlukan untuk node WS/TLS seperti export Nekobox; tanpa field tersebut, node terlihat sehat pada TCP tetapi gagal saat handshake protocol.
 
 ## Load dan acceptance smoke
 
