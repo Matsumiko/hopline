@@ -67,6 +67,22 @@ class SingBoxEngineTests(unittest.TestCase):
                 await engine.close()
 
         asyncio.run(scenario())
+    @unittest.skipUnless(shutil.which("sing-box"), "sing-box is required")
+    def test_generation_skips_reserved_control_port(self) -> None:
+        async def scenario() -> None:
+            engine = SingBoxEngine(base_port=18980, reserved_ports=(18980,))
+            config = {
+                "log": {"disabled": True},
+                "inbounds": [{"type": "mixed", "tag": "mixed-in", "listen": "127.0.0.1", "listen_port": 18980, "users": []}],
+                "outbounds": [{"type": "direct", "tag": "direct"}],
+            }
+            try:
+                generation = await engine.start_generation(config)
+                self.assertEqual(generation.port, 18981)
+            finally:
+                await engine.close()
+
+        asyncio.run(scenario())
 
     @unittest.skipUnless(shutil.which("sing-box"), "sing-box is required")
     def test_gateway_reaches_local_target_through_generation(self) -> None:

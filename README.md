@@ -135,7 +135,7 @@ Active probe opsional dikonfigurasi tanpa credential. Target wajib diisi agar no
 ```toml
 [health]
 mode = "http"
-targets = ["https://provider.example/health"]
+targets = ["http://cp.cloudflare.com/"]
 interval = 300
 timeout = 5
 concurrency = 10

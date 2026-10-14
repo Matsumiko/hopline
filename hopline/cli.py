@@ -142,6 +142,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         binary=config.sing_box_binary,
         base_port=config.tunnel_port,
         workdir=config.engine_workdir,
+        reserved_ports=(config.gateway_port, config.control_port, config.metrics_port),
     )
     gateway: Gateway | None = None
     scheduler: SubscriptionScheduler | None = None
@@ -211,9 +212,18 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         if config.probe_targets:
             probe = None
             if config.probe_mode == "http":
-                from functools import partial
                 from .probe import http_connect_probe
-                probe = partial(http_connect_probe, proxy_host=config.probe_proxy_host, proxy_port=config.probe_proxy_port)
+
+                async def probe(node, target):
+                    generation = engine.manager.active
+                    if generation is None:
+                        return False
+                    return await http_connect_probe(
+                        node,
+                        target,
+                        proxy_host=config.probe_proxy_host,
+                        proxy_port=generation.port,
+                    )
             probe_scheduler = ActiveProbeScheduler(
                 health,
                 registry.list_nodes,

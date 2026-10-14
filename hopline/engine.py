@@ -4,8 +4,10 @@ import asyncio
 import json
 import shutil
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from .generation import Generation, GenerationManager
 from .models import Node
 from .singbox import build_config
@@ -24,9 +26,11 @@ class SingBoxEngine:
         binary: str = "sing-box",
         base_port: int = 18771,
         workdir: str | Path | None = None,
+        reserved_ports: Iterable[int] = (),
     ) -> None:
         self.binary = binary
         self.base_port = base_port
+        self.reserved_ports = frozenset(reserved_ports)
         self.root = Path(workdir) if workdir else Path(tempfile.mkdtemp(prefix="hopline-engine-"))
         self.root.mkdir(parents=True, exist_ok=True)
         for stale in self.root.glob("generation-*"):
@@ -68,6 +72,9 @@ class SingBoxEngine:
         label = f"generation-{self._next_generation}"
         self._next_generation += 1
         port = self.base_port + self._next_generation - 1
+        while port in self.reserved_ports:
+            self._next_generation += 1
+            port = self.base_port + self._next_generation - 1
         directory = self.root / label
         directory.mkdir(parents=True, exist_ok=False)
         config_copy = json.loads(json.dumps(config))
