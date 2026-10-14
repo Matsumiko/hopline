@@ -10,6 +10,9 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 
+DEFAULT_EXIT_IP_URL = "https://api.ipify.org?format=json"
+
+
 @dataclass(frozen=True, slots=True)
 class GeoResult:
     ip: str
@@ -62,6 +65,37 @@ class GeolocationResolver:
             except (KeyError, TypeError, ValueError, GeoLookupError, OSError, json.JSONDecodeError) as error:
                 errors.append(f"{provider.name}:{type(error).__name__}")
         raise GeoLookupError("all geolocation providers failed: " + ", ".join(errors))
+
+
+def fetch_exit_ip(
+    *,
+    proxy_host: str,
+    proxy_port: int,
+    proxy_username: str,
+    proxy_password: str,
+    target_url: str = DEFAULT_EXIT_IP_URL,
+    timeout: float = 10,
+    fetch: Callable[[str, str, float], bytes] | None = None,
+) -> str:
+    """Fetch the observed public IP through one Hopline node route."""
+    parsed = urllib.parse.urlsplit(target_url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+        raise ValueError("exit IP URL must be an HTTPS URL without credentials or fragments")
+    if not proxy_host or not 1 <= proxy_port <= 65535:
+        raise ValueError("exit IP proxy endpoint is invalid")
+    if not proxy_username or not proxy_password or timeout <= 0:
+        raise ValueError("exit IP proxy credentials or timeout are invalid")
+    proxy_url = "http://" + urllib.parse.quote(proxy_username, safe="") + ":" + urllib.parse.quote(proxy_password, safe="") + "@" + proxy_host + ":" + str(proxy_port)
+    body = fetch(target_url, proxy_url, timeout) if fetch is not None else _fetch_through_proxy(target_url, proxy_url, timeout)
+    try:
+        payload = json.loads(body)
+        value = payload.get("ip") if isinstance(payload, dict) else None
+    except json.JSONDecodeError:
+        value = body.decode("utf-8").strip()
+    _require_ip(value)
+    return value
+
+
 def is_fresh(result: GeoResult, *, now: float, max_age: float) -> bool:
     if max_age <= 0:
         raise ValueError("geolocation max_age must be positive")
@@ -87,6 +121,16 @@ def default_providers() -> tuple[GeoProvider, ...]:
             (("Referer", "https://cekipsaya.com/cek-ip-saya/"),),
         ),
     )
+
+
+def _fetch_through_proxy(target_url: str, proxy_url: str, timeout: float) -> bytes:
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}))
+    request = urllib.request.Request(target_url, headers={"Accept": "application/json"}, method="GET")
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            return response.read(16 * 1024)
+    except OSError as error:
+        raise GeoLookupError("exit IP request failed") from error
 
 
 def _fetch_json(url: str, headers: tuple[tuple[str, str], ...]) -> dict:

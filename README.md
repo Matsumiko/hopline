@@ -84,6 +84,13 @@ url = "https://example.invalid/subscription"
 
 `[auth]` wajib berisi username dan password lokal. Simpan file TOML dengan permission `0600`. Credential node/provider tetap berada internal Hopline dan tidak pernah menjadi credential client. `control_port` default `18772` untuk service production dan dapat diatur ke `0` pada test agar OS memilih port ephemeral. CLI `status` dan `nodes` tetap memakai `18772` secara default; gunakan `--port` jika daemon memakai port lain.
 Untuk affinity per sesi, gunakan username proxy `sticky-<sessionId>`, misalnya `sticky-job-42`. Binding hanya hidup di proses Gateway dan hilang saat restart; TTL diperpanjang ketika koneksi berhasil dipakai. `node-<id>` tetap forced tanpa fallback, sedangkan `rotate` tetap memilih ulang per koneksi.
+Untuk memverifikasi lokasi IP exit satu node, daemon harus sedang berjalan dan node sudah tersimpan di registry:
+
+```bash
+python3 -m hopline geo --config hopline.toml --node <node-id> --json
+```
+
+Command ini membuka request HTTPS ke endpoint self-IP melalui Gateway memakai route `node-<node-id>`, lalu mengirim IP hasilnya ke fallback geolocation dan menyimpan metadata non-secret ke SQLite. `--exit-ip-url` dapat mengganti endpoint self-IP yang kompatibel mengembalikan `{"ip":"..."}`. Command gagal jika node tidak ada, Gateway tidak berjalan, atau response tidak berisi IP valid.
 
 
 Jalankan sekali atau sebagai daemon:

@@ -5,11 +5,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
+from hopline.geolocation import GeoResult
+from hopline.models import Node
+from hopline.registry import SQLiteRegistry
+from hopline.cli import _geo
 from hopline.scheduler import SubscriptionScheduler
 from hopline.syncer import SyncResult
-
 
 class SchedulerCliTests(unittest.TestCase):
     def test_scheduler_syncs_each_source_and_stops_before_next_cycle(self) -> None:
@@ -28,6 +31,30 @@ class SchedulerCliTests(unittest.TestCase):
         self.assertEqual(syncer.sync_url.await_count, 2)
         scheduler.stop()
 
+    def test_geo_command_fetches_exit_ip_resolves_and_persists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "registry.db"
+            config_path = Path(directory) / "hopline.toml"
+            config_path.write_text(
+                f'static_nodes = ["vless://00000000-0000-4000-8000-000000000001@example.test:443"]\n\n[hopline]\ndatabase = "{database}"\n\n[auth]\npassword = "local-secret"\n',
+                encoding="utf-8",
+            )
+            config_path.chmod(0o600)
+            registry = SQLiteRegistry(str(database))
+            registry.replace_subscription("fixture", "hash", [Node("node-a", "vless", "relay.test", 443, "node-secret")])
+            registry.close()
+            geo_result = GeoResult("203.0.113.8", "ID", "Indonesia", "AS64500", "Example", "checkip", 10.0)
+            resolver = type("FakeResolver", (), {"resolve": lambda self, ip: geo_result})
+            with patch("hopline.cli.fetch_exit_ip", return_value="203.0.113.8") as fetch_ip, patch(
+                "hopline.cli.GeolocationResolver", return_value=resolver()
+            ):
+                payload = asyncio.run(_geo(str(config_path), "node-a", "https://api.example.test/ip"))
+            fetch_ip.assert_called_once()
+            self.assertEqual(payload["country_code"], "ID")
+            saved = SQLiteRegistry(str(database)).geolocation_record("node-a")
+            self.assertEqual(saved["ip"], "203.0.113.8")
+            self.assertNotIn("node-secret", json.dumps(payload))
+
     def test_cli_help_is_available_without_database_or_url(self) -> None:
         result = subprocess.run(
             [sys.executable, "-m", "hopline", "--help"],
@@ -37,7 +64,18 @@ class SchedulerCliTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0)
         self.assertIn("sync", result.stdout)
+        self.assertIn("geo", result.stdout)
         self.assertIn("doctor", result.stdout)
+
+    def test_cli_geo_requires_config_and_node(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "hopline", "geo", "--node", "node-a", "--json"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("config file does not exist", result.stderr)
 
     def test_cli_doctor_json_is_parseable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

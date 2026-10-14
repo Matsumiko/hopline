@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from .config import HoplineConfig
 from .engine import SingBoxEngine
 from .gateway import Gateway
+from .geolocation import GeolocationResolver, fetch_exit_ip
 from .health import HealthChecker
 from .registry import SQLiteRegistry
 from .scheduler import SubscriptionScheduler
@@ -29,6 +30,11 @@ def _parser() -> argparse.ArgumentParser:
         sub.add_argument("--url", default=os.environ.get("HOPLINE_SUBSCRIPTION_URL"), help="subscription URL")
         sub.add_argument("--db", default=DEFAULT_DB, help="SQLite registry path")
         sub.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
+    geo = subparsers.add_parser("geo", help="Resolve the exit IP and country of one node")
+    geo.add_argument("--config", default=os.environ.get("HOPLINE_CONFIG", "hopline.toml"), help="TOML config path")
+    geo.add_argument("--node", required=True, help="node ID to test")
+    geo.add_argument("--exit-ip-url", default="https://api.ipify.org?format=json", help="HTTPS endpoint returning the observed IP")
+    geo.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
     doctor = subparsers.add_parser("doctor", help="Check local Hopline prerequisites")
     doctor.add_argument("--db", default=DEFAULT_DB, help="SQLite registry path")
     doctor.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
@@ -61,6 +67,37 @@ async def _sync(url: str, database: str) -> dict[str, object]:
     try:
         result = await Syncer(registry).sync_url(url)
         return {"changed": result.changed, "invalid_entries": result.invalid_entries, "nodes": result.parsed_nodes, "not_modified": result.not_modified, "status": result.status, "used_last_valid": result.used_last_valid}
+    finally:
+        registry.close()
+
+
+async def _geo(config_path: str, node_id: str, exit_ip_url: str) -> dict[str, object]:
+    config = HoplineConfig.from_file(config_path)
+    registry = SQLiteRegistry(config.database)
+    try:
+        if node_id not in {node.id for node in registry.list_nodes()}:
+            raise ValueError(f"node not found: {node_id}")
+        ip = await asyncio.to_thread(
+            fetch_exit_ip,
+            proxy_host=config.gateway_host,
+            proxy_port=config.gateway_port,
+            proxy_username=f"node-{node_id}",
+            proxy_password=config.proxy_password,
+            target_url=exit_ip_url,
+        )
+        result = await asyncio.to_thread(GeolocationResolver().resolve, ip)
+        registry.save_geolocation(node_id, result)
+        return {
+            "node": node_id,
+            "ip": result.ip,
+            "country_code": result.country_code,
+            "country": result.country,
+            "asn": result.asn,
+            "organization": result.organization,
+            "provider": result.provider,
+            "checked_at": result.checked_at,
+        }
+
     finally:
         registry.close()
 
@@ -213,8 +250,10 @@ async def _run_daemon(config_path: str, once: bool) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        if args.command == "run":
-            return asyncio.run(_run_daemon(args.config, args.once))
+        if args.command == "geo":
+            payload = asyncio.run(_geo(args.config, args.node, args.exit_ip_url))
+            _emit(payload, args.as_json)
+            return 0
         if args.command == "doctor":
             payload = _doctor(args.db)
             _emit(payload, args.as_json)

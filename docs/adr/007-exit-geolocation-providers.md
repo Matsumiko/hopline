@@ -18,7 +18,7 @@ Hopline menyediakan adapter geolocation dengan fallback berurutan:
 
 Response harus mengembalikan IP yang sama dengan IP input dan country code ISO-3166 alpha-2. `cekipsaya` memakai field `country` seperti `Poland (PL)`; `resolved=false` tidak menggagalkan hasil jika IP dan country tersedia.
 
-Hasil disimpan di tabel `geolocation`, terpisah dari health, dengan IP, country, ASN, organisasi, provider, dan timestamp. Credential node, URL subscription, dan secret tidak disimpan di hasil diagnostic atau error fallback.
+Hasil disimpan di tabel `geolocation`, terpisah dari health, dengan IP, country, ASN, organisasi, provider, dan timestamp. Credential node, URL subscription, dan secret tidak disimpan di hasil diagnostic atau error fallback. Command `hopline geo --config <file> --node <id> --json` memperoleh IP melalui HTTPS self-IP request yang melewati Gateway dengan username `node-<id>` dan password lokal Hopline.
 
 ## Consequences
 
@@ -36,5 +36,5 @@ Hasil disimpan di tabel `geolocation`, terpisah dari health, dengan IP, country,
 
 ## Confirmation
 
-- Unit tests memvalidasi normalisasi CheckIP, fallback ke ip.cc dan cekipsaya, IP mismatch rejection, Referer lookup, secret safety, dan SQLite persistence.
-- Runtime country routing tetap gated sampai diagnostic tunnel integration tersedia.
+- Unit tests memvalidasi normalisasi CheckIP, fallback ke ip.cc dan cekipsaya, IP mismatch rejection, Referer lookup, self-IP request melalui route node, secret safety, dan SQLite persistence.
+- Runtime country routing tetap gated sampai country picker, cache freshness, dan empty-pool behavior memiliki acceptance test.

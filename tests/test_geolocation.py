@@ -1,6 +1,6 @@
 import unittest
 
-from hopline.geolocation import GeolocationResolver, GeoLookupError, GeoResult, default_providers, is_fresh
+from hopline.geolocation import GeolocationResolver, GeoLookupError, GeoResult, default_providers, fetch_exit_ip, is_fresh
 from hopline.models import Node
 from hopline.registry import SQLiteRegistry
 
@@ -62,6 +62,41 @@ class GeolocationTests(unittest.TestCase):
         self.assertIn(("Referer", "https://cekipsaya.com/cek-ip-saya/"), calls[-1][1])
         self.assertIn("action=lookup", calls[-1][0])
         self.assertIn("target=104.28.156.33", calls[-1][0])
+
+    def test_fetch_exit_ip_uses_node_route_credentials(self) -> None:
+        captured: list[tuple[str, str, float]] = []
+
+        def fetch(url: str, proxy: str, timeout: float) -> bytes:
+            captured.append((url, proxy, timeout))
+            return b'{"ip":"203.0.113.8"}'
+
+        ip = fetch_exit_ip(
+            proxy_host="127.0.0.1",
+            proxy_port=18770,
+            proxy_username="node-a",
+            proxy_password="local-secret",
+            target_url="https://api.example.test/ip?format=json",
+            timeout=4,
+            fetch=fetch,
+        )
+        self.assertEqual(ip, "203.0.113.8")
+        self.assertEqual(captured[0][0], "https://api.example.test/ip?format=json")
+        self.assertIn("node-a", captured[0][1])
+        self.assertIn("local-secret", captured[0][1])
+
+    def test_fetch_exit_ip_rejects_invalid_response_without_secret_in_error(self) -> None:
+        def fetch(_url: str, _proxy: str, _timeout: float) -> bytes:
+            return b"not-an-ip"
+
+        with self.assertRaises(GeoLookupError) as raised:
+            fetch_exit_ip(
+                proxy_host="127.0.0.1",
+                proxy_port=18770,
+                proxy_username="node-a",
+                proxy_password="local-secret",
+                fetch=fetch,
+            )
+        self.assertNotIn("local-secret", str(raised.exception))
 
     def test_registry_persists_only_non_secret_geolocation_metadata(self) -> None:
         registry = SQLiteRegistry(":memory:")

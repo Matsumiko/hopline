@@ -228,7 +228,7 @@ Hopline membedakan tes liveness ringan dari diagnostic berbiaya tinggi. Active h
 
 Mode diagnostic seperti full download/upload, country lookup, dan simple download tidak dijalankan periodik oleh health scheduler. Mode tersebut membutuhkan traffic nyata, dependency endpoint eksternal, atau interpretasi metadata tambahan. Jika ditambahkan ke CLI, hasilnya harus dipisahkan sebagai diagnostic dan tidak boleh mengubah health node tanpa policy eksplisit.
 
-Country dari server pengujian bukan bukti negara IP keluar. Verifikasi negara harus memakai endpoint geolocation yang memang mengembalikan IP/negara dan dicatat sebagai hasil diagnostic terpisah. Adapter baseline memakai fallback `checkip.com` → `ip.cc` → `cekipsaya.com?action=lookup&target={ip}`. Response `cekipsaya` dengan `resolved=false` tetap dapat diterima jika IP dan country valid. Hasil wajib memiliki freshness policy; provider failure atau hasil stale tidak mengubah health node.
+Country dari server pengujian bukan bukti negara IP keluar. Verifikasi negara harus memakai endpoint geolocation yang memang mengembalikan IP/negara dan dicatat sebagai hasil diagnostic terpisah. Adapter baseline memakai fallback `checkip.com` → `ip.cc` → `cekipsaya.com?action=lookup&target={ip}`. Response `cekipsaya` dengan `resolved=false` tetap dapat diterima jika IP dan country valid. Hasil wajib memiliki freshness policy; provider failure atau hasil stale tidak mengubah health node. Command `hopline geo --config <file> --node <id> --json` memperoleh self-IP melalui route `node-<id>` pada Gateway, lalu menyimpan metadata geolocation non-secret.
 
 ## Persyaratan non-fungsional
 
