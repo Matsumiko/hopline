@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, optional localhost Prometheus metrics, Linux installation runbook, hardened systemd unit, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, health registry, localhost control API, serta daemon wiring engine/gateway tersedia; staging runtime lulus dengan sing-box system-wide.
-- **Last verified:** 46 test F1, live subscription sync 100 node, config check, CLI contract, daemon once dengan engine/gateway aktif, systemd verify, deployment hardening smoke, staging systemd start/control/metrics/state-path checks, sing-box doctor, listener check, dan CONNECT handshake lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, optional localhost Prometheus metrics, Linux installation runbook, hardened systemd unit, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, health registry, localhost control API, serta daemon wiring engine/gateway tersedia; staging runtime lulus dengan subscription nyata dan sing-box system-wide.
+- **Last verified:** 46 test F1, subscription nyata ter-fetch dan ter-parse 301 node (SS 75, Trojan 75, VLESS 76, VMess 75), daemon systemd active dengan 601 registry nodes, control/metrics/listener checks, CONNECT handshake, TCP reachability 600/601, dan satu sampel Trojan menghasilkan IP egress `131.186.63.89`; tanpa menampilkan credential.
 
 ## Selesai
 
@@ -24,12 +24,13 @@
 - Smoke node VLESS live lulus secara ephemeral: IP VPS `103.247.23.141`, IP egress node `131.186.63.89`, dan runtime log tidak mengandung credential.
 - Config live membutuhkan penghapusan field legacy `outbounds[0].encryption` agar diterima sing-box 1.14.3; config asli tidak diubah.
 
-- Menjalankan acceptance egress melalui node subscription nyata atau fixture outbound yang valid.
+- Menentukan kestabilan egress Trojan dan memperbaiki/menandai transport SS, VLESS, dan VMess yang gagal.
 
 ## Berikutnya
 
-1. Jalankan proxy egress smoke dengan node subscription yang dapat dijangkau.
-2. Tetapkan production provider probe target dan retention metrics.
+1. Jalankan sampel egress berulang pada node Trojan yang berhasil dan ukur success rate per protocol.
+2. Periksa parameter transport node gagal terhadap format subscription/provider.
+3. Tetapkan production provider probe target dan retention metrics.
 
 ## Bukti
 
@@ -71,7 +72,7 @@ Load smoke: `concurrency=16`, `limit=4`, `admitted=4`, `rejected=12`.
 
 HTTPS proxy acceptance: CONNECT gateway → upstream proxy → local origin, payload `pong` kembali end-to-end.
 
-Gate F1: **in progress**. Runtime daemon kini menjalankan sync → sing-box generation → gateway; staging systemd, control API, metrics, listeners, dan CONNECT handshake lulus. Egress IP nyata belum diverifikasi karena fixture node staging tidak menyediakan outbound VLESS yang valid.
+Gate F1: **in progress**. Subscription nyata tersinkron dan daemon menjalankan 601 node. CONNECT dan TCP reachability lulus; satu uji Trojan berhasil mengembalikan IP egress `131.186.63.89`, tetapi hasil belum stabil pada pengulangan dan SS/VLESS/VMess belum berhasil. Production go/no-go belum lulus.
 - Seluruh file yang dirujuk PRD dan README tersedia.
 - Link ke indeks ADR dan ADR-001 tersedia.
 - Placeholder diagram arsitektur di PRD diganti dengan diagram Mermaid yang memuat gateway, picker, sing-box, syncer, checker, scorer, dan SQLite.
@@ -79,8 +80,8 @@ Gate F1: **in progress**. Runtime daemon kini menjalankan sync → sing-box gene
 
 ## Blocker / Risiko Aktif
 
-| Egress IP nyata belum diverifikasi | open | CONNECT handshake ke generation lulus, tetapi fixture VLESS staging bukan node yang dapat dijangkau | Gunakan subscription/node uji valid lalu cek target IP melalui proxy |
-| Real production-host installation belum dijalankan | open | Staging host berbeda dari production target | Jalankan runbook pada target production/staging yang disepakati |
+| Egress belum stabil per protocol | open | Satu Trojan sample sukses, pengulangan gagal timeout; SS/VLESS/VMess sample gagal HTTP 000 | Uji sampel lebih besar, korelasikan node/transport, dan validasi parameter provider |
+| Registry masih menahan node lama | expected | Hysteresis menghapus node setelah tiga snapshot hilang; total 601 mencakup snapshot nyata dan node lama | Biarkan tiga sync berikutnya atau reset state staging sebelum baseline baru |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
 
 

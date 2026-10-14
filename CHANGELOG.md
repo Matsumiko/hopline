@@ -182,3 +182,14 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Staging with system-wide sing-box passed `doctor`, service startup, listeners on ports 18770–18773, and a live CONNECT handshake.
 - Systemd allows `AF_NETLINK`, required by sing-box 1.14.3 under the service sandbox; the service remains localhost-only.
 - Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.
+
+### Verified
+
+- User-provided subscription fetched successfully and parsed into 301 fresh nodes: 75 Shadowsocks, 75 Trojan, 76 VLESS, and 75 VMess.
+- Staging daemon ran with 601 registry nodes, systemd active, all localhost listeners available, and CONNECT handshake returning `200 Connection Established`.
+- Public HTTPS egress was not proven: 20 rotate attempts and 19 explicitly healthy-node attempts returned HTTP 000 / `SSL_ERROR_SYSCALL` after CONNECT; no egress IP was recorded.
+
+### Verified
+
+- Real subscription runtime held 601 registry nodes; TCP reachability was 600/601.
+- Protocol sample: one Trojan node returned egress IP `131.186.63.89`; sampled SS, VLESS, and VMess nodes failed HTTPS relay, and repeated Trojan attempts timed out. Production egress stability remains open.
