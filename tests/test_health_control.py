@@ -27,6 +27,35 @@ class HealthControlTests(unittest.TestCase):
         self.assertEqual(record.state, HealthState.HEALTHY)
         self.assertIsNotNone(record.latency_ms)
 
+    def test_failure_cooldown_excludes_node_until_clock_advances(self) -> None:
+        registry = SQLiteRegistry(":memory:")
+        registry.replace_subscription("fixture", "hash", [Node("a", "vless", "a.test", 443, "uuid")])
+        now = [100.0]
+        checker = HealthChecker(registry, clock=lambda: now[0])
+
+        record = checker.record_failure("a", "timeout")
+        self.assertEqual(record.state, HealthState.DEGRADED)
+        self.assertFalse(checker.is_available("a"))
+        now[0] += 30.1
+        self.assertTrue(checker.is_available("a"))
+
+    def test_dead_node_uses_backoff_and_recovers_with_hysteresis(self) -> None:
+        registry = SQLiteRegistry(":memory:")
+        registry.replace_subscription("fixture", "hash", [Node("a", "vless", "a.test", 443, "uuid")])
+        now = [100.0]
+        checker = HealthChecker(registry, clock=lambda: now[0])
+
+        checker.record_failure("a", "timeout")
+        checker.record_failure("a", "timeout")
+        record = checker.record_failure("a", "timeout")
+        self.assertEqual(record.state, HealthState.DEAD)
+        self.assertFalse(checker.should_probe("a"))
+        now[0] += 60.1
+        self.assertTrue(checker.should_probe("a"))
+        self.assertEqual(checker.record_success("a").state, HealthState.DEGRADED)
+        self.assertEqual(checker.record_success("a").state, HealthState.DEGRADED)
+        self.assertEqual(checker.record_success("a").state, HealthState.HEALTHY)
+
     def test_control_api_returns_nodes_without_credentials(self) -> None:
         async def scenario() -> None:
             registry = SQLiteRegistry(":memory:")

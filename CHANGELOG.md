@@ -9,6 +9,7 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Production deployment verified for local Gateway auth on the authorized Debian 12 VPS: commit `70c6cb7` active, `[auth]` config private, valid credential returned CONNECT `200`, and wrong/missing credentials returned `407`. Control status reported four healthy nodes and the authenticated egress smoke returned HTTP `200`.
 - Menambahkan riset dan ADR health probing berdasarkan source NekoBox. URL/HTTP test tetap menjadi active health yang ringan; full/download/upload/country/simple-download dipisahkan sebagai diagnostic on-demand. Forced-node regression memastikan `node-<id>` tidak fallback ke node lain.
 - Dokumentasi health probe diperjelas: HTTP/URL probe adalah active health; lima mode NekoBox lainnya diposisikan sebagai diagnostic on-demand dan forced routing tidak melakukan fallback.
+- Fase 2 health/failover: cooldown 30 detik setelah failure, eject setelah tiga failure berturut-turut, active-probe backoff, recovery hysteresis, picker filtering, dan fast 503 saat pool kosong. Regression coverage menegaskan pre-forward failover, no-retry setelah byte, active-stream preservation, serta relay incremental.
 
 - Baseline dokumentasi proyek: `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `PROGRESS.md`, `CONTRIBUTING.md`, `SECURITY.md`, dan `AGENTS.md`.
 - Indeks keputusan arsitektur di `docs/adr/`.

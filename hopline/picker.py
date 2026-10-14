@@ -13,9 +13,11 @@ class NodePicker:
         node_ids: Iterable[str],
         *,
         state: Callable[[str], HealthState | str | None] | None = None,
+        available: Callable[[str], bool] | None = None,
     ) -> None:
         self._node_ids = tuple(node_ids)
         self._state = state or (lambda _node_id: None)
+        self._available = available or (lambda _node_id: True)
         self._next = 0
 
     def replace(self, node_ids: Iterable[str]) -> None:
@@ -36,4 +38,6 @@ class NodePicker:
 
     def _eligible(self, node_id: str) -> bool:
         state = self._state(node_id)
-        return state not in {HealthState.DEAD, HealthState.QUARANTINE, "dead", "quarantine"}
+        return self._available(node_id) and state not in {
+            HealthState.DEAD, HealthState.QUARANTINE, "dead", "quarantine"
+        }

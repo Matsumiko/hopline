@@ -83,6 +83,50 @@ class GenerationGatewayTests(unittest.TestCase):
             await upstream.wait_closed()
 
         asyncio.run(scenario())
+    def test_long_stream_is_relayed_incrementally(self) -> None:
+        async def scenario() -> None:
+            first_chunk = b"chunk-1"
+            second_chunk = b"chunk-2"
+            sent = asyncio.Event()
+
+            async def streaming_proxy(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                try:
+                    await reader.readuntil(b"\r\n\r\n")
+                    writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                    await writer.drain()
+                    writer.write(first_chunk)
+                    await writer.drain()
+                    sent.set()
+                    await asyncio.sleep(0.05)
+                    writer.write(second_chunk)
+                    await writer.drain()
+                    await asyncio.sleep(0.05)
+                finally:
+                    writer.close()
+                    await writer.wait_closed()
+
+            upstream = await asyncio.start_server(streaming_proxy, "127.0.0.1", 0)
+            gateway = Gateway(
+                host="127.0.0.1", port=0,
+                generation_port=upstream.sockets[0].getsockname()[1],
+                generation_credentials={"node-a": "x"}, proxy_password="x",
+            )
+            await gateway.start()
+            reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
+            writer.write(b"CONNECT example.test:443 HTTP/1.1\r\nProxy-Authorization: Basic aG9wbGluZTp4\r\n\r\n")
+            await writer.drain()
+            self.assertEqual(await reader.readuntil(b"\r\n\r\n"), b"HTTP/1.1 200 Connection Established\r\n\r\n")
+            await asyncio.wait_for(sent.wait(), 2)
+            self.assertEqual(await asyncio.wait_for(reader.readexactly(len(first_chunk)), 2), first_chunk)
+            self.assertEqual(await asyncio.wait_for(reader.readexactly(len(second_chunk)), 2), second_chunk)
+            writer.close()
+            await writer.wait_closed()
+            await gateway.stop()
+            await gateway.wait_closed()
+            upstream.close()
+            await upstream.wait_closed()
+
+        asyncio.run(scenario())
 
 
 if __name__ == "__main__":

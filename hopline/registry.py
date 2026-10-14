@@ -79,7 +79,11 @@ class SQLiteRegistry:
                 failures INTEGER NOT NULL DEFAULT 0,
                 latency_ms REAL,
                 last_error TEXT,
-                updated_at REAL NOT NULL
+                updated_at REAL NOT NULL,
+                cooldown_until REAL NOT NULL DEFAULT 0,
+                probe_after REAL NOT NULL DEFAULT 0,
+                consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                consecutive_successes INTEGER NOT NULL DEFAULT 0
             );
             """
         )
@@ -90,7 +94,17 @@ class SQLiteRegistry:
         tables = {
             "nodes": {row[1] for row in self.connection.execute("PRAGMA table_info(nodes)")},
             "subscriptions": {row[1] for row in self.connection.execute("PRAGMA table_info(subscriptions)")},
+            "health": {row[1] for row in self.connection.execute("PRAGMA table_info(health)")},
         }
+        health_columns = (
+            ("cooldown_until", "REAL NOT NULL DEFAULT 0"),
+            ("probe_after", "REAL NOT NULL DEFAULT 0"),
+            ("consecutive_failures", "INTEGER NOT NULL DEFAULT 0"),
+            ("consecutive_successes", "INTEGER NOT NULL DEFAULT 0"),
+        )
+        for name, definition in health_columns:
+            if name not in tables["health"]:
+                self.connection.execute(f"ALTER TABLE health ADD COLUMN {name} {definition}")
         node_columns = (
             ("path", "TEXT"), ("host", "TEXT"), ("method", "TEXT"),
             ("plugin", "TEXT"), ("plugin_opts", "TEXT"), ("security", "TEXT"),
@@ -129,7 +143,9 @@ class SQLiteRegistry:
         from .health import HealthRecord, HealthState
 
         row = self.connection.execute(
-            "SELECT node_id, state, successes, failures, latency_ms, last_error, updated_at FROM health WHERE node_id = ?",
+            "SELECT node_id, state, successes, failures, latency_ms, last_error, updated_at, "
+            "cooldown_until, probe_after, consecutive_failures, consecutive_successes "
+            "FROM health WHERE node_id = ?",
             (node_id,),
         ).fetchone()
         if row is None:
@@ -137,20 +153,34 @@ class SQLiteRegistry:
         return HealthRecord(
             row["node_id"], HealthState(row["state"]), row["successes"],
             row["failures"], row["latency_ms"], row["last_error"], row["updated_at"],
+            row["cooldown_until"], row["probe_after"],
+            row["consecutive_failures"], row["consecutive_successes"],
         )
 
-    def save_health(self, node_id: str, state, successes: int, failures: int, latency_ms: float | None, last_error: str | None):
+    def save_health(
+        self, node_id: str, state, successes: int, failures: int,
+        latency_ms: float | None, last_error: str | None, *,
+        cooldown_until: float = 0.0, probe_after: float = 0.0,
+        consecutive_failures: int = 0, consecutive_successes: int = 0,
+    ):
         import time
 
         updated_at = time.time()
         with self.connection:
             self.connection.execute(
-                """INSERT INTO health(node_id, state, successes, failures, latency_ms, last_error, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """INSERT INTO health(
+                    node_id, state, successes, failures, latency_ms, last_error, updated_at,
+                    cooldown_until, probe_after, consecutive_failures, consecutive_successes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(node_id) DO UPDATE SET state=excluded.state, successes=excluded.successes,
                 failures=excluded.failures, latency_ms=excluded.latency_ms, last_error=excluded.last_error,
-                updated_at=excluded.updated_at""",
-                (node_id, str(state), successes, failures, latency_ms, last_error, updated_at),
+                updated_at=excluded.updated_at, cooldown_until=excluded.cooldown_until,
+                probe_after=excluded.probe_after, consecutive_failures=excluded.consecutive_failures,
+                consecutive_successes=excluded.consecutive_successes""",
+                (
+                    node_id, str(state), successes, failures, latency_ms, last_error, updated_at,
+                    cooldown_until, probe_after, consecutive_failures, consecutive_successes,
+                ),
             )
         return self.health_record(node_id)
 

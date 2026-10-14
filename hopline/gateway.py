@@ -18,6 +18,7 @@ class Gateway:
         generation_port: int,
         generation_credentials: dict[str, str],
         health_state: Callable[[str], HealthState | str | None] | None = None,
+        health_available: Callable[[str], bool] | None = None,
         record_success: Callable[[str], None] | None = None,
         record_failure: Callable[[str, str], None] | None = None,
         max_active_connections: int = 64,
@@ -32,14 +33,17 @@ class Gateway:
         self._requested_port = port
         self._generation_port = generation_port
         self._generation_credentials = dict(generation_credentials)
-        self._picker = NodePicker(generation_credentials, state=health_state)
+        self._picker = NodePicker(
+            generation_credentials,
+            state=health_state,
+            available=health_available,
+        )
         self._record_success = record_success
         self._record_failure = record_failure
         self._max_active_connections = max_active_connections
         self._proxy_username = proxy_username
-        self._proxy_password = proxy_password
         self._active_connections: dict[str, int] = {node_id: 0 for node_id in generation_credentials}
-        self._accepting = False
+        self._proxy_password = proxy_password
         self._server: asyncio.AbstractServer | None = None
         self._tasks: set[asyncio.Task[None]] = set()
 
@@ -107,7 +111,7 @@ class Gateway:
                 return
             candidates = self._picker.candidates(requested_node)
             if not candidates:
-                await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+                await self._respond(client, b"HTTP/1.1 503 Service Unavailable\r\n\r\n")
                 return
 
             attempted_any = False

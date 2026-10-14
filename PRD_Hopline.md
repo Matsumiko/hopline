@@ -153,7 +153,7 @@ Scorer menyimpan sliding window 20 hasil terakhir dan EWMA latensi per node (dan
 | --- | --- |
 | 3 kegagalan berturut-turut | dead seketika, dikeluarkan dari traffic nyata, probe segera dipicu |
 | Success rate di bawah 70% pada window, atau EWMA latensi lebih dari 2x median pool | degraded |
-| Node dead | quarantine, tes ulang dengan backoff 1, 2, 5, 15 menit, maksimal 60 menit |
+| Node dead | quarantine, tes ulang dengan backoff 1, 2, 5, 15, 60 menit |
 | 1 probe sukses dari quarantine | degraded |
 | 3 sukses berturut-turut dari degraded | healthy (hysteresis agar tidak flapping) |
 | Setelah satu kegagalan | cooldown 30 detik sebelum node bisa dipilih lagi |

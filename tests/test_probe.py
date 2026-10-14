@@ -44,7 +44,11 @@ class ProbeTests(unittest.TestCase):
             first = await scheduler.probe_once()
             self.assertEqual(first[0].state, HealthState.DEGRADED)
             second = await scheduler.probe_once()
-            self.assertEqual(second[0].state, HealthState.HEALTHY)
+            self.assertEqual(second[0].state, HealthState.DEGRADED)
+            third = await scheduler.probe_once()
+            self.assertEqual(third[0].state, HealthState.DEGRADED)
+            fourth = await scheduler.probe_once()
+            self.assertEqual(fourth[0].state, HealthState.HEALTHY)
             registry.close()
 
         asyncio.run(scenario())

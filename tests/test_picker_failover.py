@@ -14,6 +14,48 @@ class PickerFailoverTests(unittest.TestCase):
         self.assertEqual(picker.candidates("rotate"), ["b"])
         self.assertEqual(picker.candidates("a"), [])
 
+    def test_picker_skips_node_during_cooldown(self) -> None:
+        states = {"a": HealthState.HEALTHY, "b": HealthState.HEALTHY}
+        available = {"a": False, "b": True}
+        picker = NodePicker(states, state=states.get, available=available.get)
+        self.assertEqual(picker.candidates("rotate"), ["b"])
+
+    def test_gateway_returns_503_when_all_nodes_are_unavailable(self) -> None:
+        async def scenario() -> None:
+            async def upstream_handler(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                writer.close()
+                await writer.wait_closed()
+
+            upstream = await asyncio.start_server(upstream_handler, "127.0.0.1", 0)
+            states = {"node-a": HealthState.DEAD, "node-b": HealthState.DEAD}
+            gateway = Gateway(
+                host="127.0.0.1",
+                port=0,
+                generation_port=upstream.sockets[0].getsockname()[1],
+                generation_credentials={"node-a": "x", "node-b": "x"},
+                health_state=states.get,
+                proxy_password="x",
+            )
+            await gateway.start()
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
+                token = base64.b64encode(b"rotate:x").decode()
+                writer.write(
+                    f"CONNECT target.test:443 HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode()
+                )
+                await writer.drain()
+                response = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)
+                self.assertTrue(response.startswith(b"HTTP/1.1 503"))
+                writer.close()
+                await writer.wait_closed()
+            finally:
+                await gateway.stop()
+                await gateway.wait_closed()
+                upstream.close()
+                await upstream.wait_closed()
+
+        asyncio.run(scenario())
+
     def test_gateway_rejects_missing_proxy_credential(self) -> None:
         async def scenario() -> None:
             async def upstream_handler(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -179,6 +221,49 @@ class PickerFailoverTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+
+    def test_gateway_does_not_retry_after_upstream_200(self) -> None:
+        async def scenario() -> None:
+            attempts: list[str] = []
+
+            async def upstream(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                try:
+                    request = await reader.readuntil(b"\r\n\r\n")
+                    auth = request.split(b"Proxy-Authorization: Basic ", 1)[1].split(b"\r\n", 1)[0]
+                    attempts.append(base64.b64decode(auth).decode().split(":", 1)[0])
+                    writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\npartial")
+                    await writer.drain()
+                finally:
+                    writer.close()
+                    await writer.wait_closed()
+
+            server = await asyncio.start_server(upstream, "127.0.0.1", 0)
+            gateway = Gateway(
+                host="127.0.0.1", port=0,
+                generation_port=server.sockets[0].getsockname()[1],
+                generation_credentials={"node-a": "x", "node-b": "x"},
+                proxy_password="x",
+            )
+            await gateway.start()
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
+                token = base64.b64encode(b"rotate:x").decode()
+                writer.write(f"CONNECT target.test:443 HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode())
+                await writer.drain()
+                response = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)
+                self.assertEqual(response, b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                self.assertEqual(await asyncio.wait_for(reader.readexactly(7), 2), b"partial")
+                self.assertEqual(await asyncio.wait_for(reader.read(), 2), b"")
+                self.assertEqual(attempts, ["node-a"])
+                writer.close()
+                await writer.wait_closed()
+            finally:
+                await gateway.stop()
+                await gateway.wait_closed()
+                server.close()
+                await server.wait_closed()
+
+        asyncio.run(scenario())
 
 if __name__ == "__main__":
     unittest.main()

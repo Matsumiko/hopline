@@ -111,6 +111,8 @@ class ActiveProbeScheduler:
     async def probe_once(self) -> list[HealthRecord]:
         records: list[HealthRecord] = []
         for index, node in enumerate(tuple(self.nodes())):
+            if not self.checker.should_probe(node.id):
+                continue
             target = self.targets[index % len(self.targets)]
             started = time.monotonic()
             try:

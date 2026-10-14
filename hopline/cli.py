@@ -158,6 +158,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             generation_port=engine.manager.active.port,
             generation_credentials={node.id: node.credential for node in nodes},
             health_state=lambda node_id: (record.state if (record := registry.health_record(node_id)) else None),
+            health_available=health.is_available,
             record_success=lambda node_id: health.record_success(node_id),
             record_failure=lambda node_id, error: health.record_failure(node_id, error),
             max_active_connections=config.max_active_connections,
