@@ -38,7 +38,7 @@ Hopline mengelola pemilihan, health, failover sebelum byte client diteruskan, si
 
 ## Status Saat Ini
 
-Package runtime tersedia di `hopline/`. Parser share-link VLESS, Trojan, VMess, dan Shadowsocks, structured parser Clash YAML/sing-box JSON, bounded subscription fetch, SQLite registry dengan removed hysteresis tiga sync, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, node routing, drain, scheduler dasar, dan CLI sudah diuji. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
+Package runtime tersedia di `hopline/`. Parser share-link VLESS, Trojan, VMess, dan Shadowsocks, structured parser Clash YAML/sing-box JSON, bounded subscription fetch, SQLite registry dengan removed hysteresis tiga sync, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, sticky routing process-local, node routing, drain, scheduler dasar, dan CLI sudah diuji. Sticky memakai username `sticky-<sessionId>`, TTL idle default 10 menit, dan rebind ke node sehat sebelum CONNECT 200 jika binding lama dead atau tidak eligible. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
 
 Parser share-link dan generator sing-box mempertahankan transport WebSocket/TLS; Shadowsocks `v2ray-plugin` menyimpan `plugin` dan `plugin_opts`, sedangkan VMess mempertahankan `security`, `global_padding`, dan `authenticated_length`.
 
@@ -82,6 +82,8 @@ url = "https://example.invalid/subscription"
 ```
 
 `[auth]` wajib berisi username dan password lokal. Simpan file TOML dengan permission `0600`. Credential node/provider tetap berada internal Hopline dan tidak pernah menjadi credential client.
+Untuk affinity per sesi, gunakan username proxy `sticky-<sessionId>`, misalnya `sticky-job-42`. Binding hanya hidup di proses Gateway dan hilang saat restart; TTL diperpanjang ketika koneksi berhasil dipakai. `node-<id>` tetap forced tanpa fallback, sedangkan `rotate` tetap memilih ulang per koneksi.
+
 
 Jalankan sekali atau sebagai daemon:
 

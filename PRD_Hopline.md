@@ -182,7 +182,7 @@ Scorer menyimpan sliding window 20 hasil terakhir dan EWMA latensi per node (dan
 | Username | Arti |
 | --- | --- |
 | rotate | Pilih ulang node tiap koneksi |
-| sticky-\<sessionId> | Node sama selama sesi, TTL default 10 menit (diperpanjang saat dipakai), rebind otomatis jika node mati |
+| sticky-\<sessionId> | Node sama selama sesi, TTL idle default 10 menit, diperpanjang setelah CONNECT sukses; state process-local |
 | country-\<cc> | Hanya node bertag negara tersebut |
 | country-\<cc>-sticky-\<sessionId> | Gabungan |
 | node-\<nodeId> | Paksa satu node, tanpa fallback |

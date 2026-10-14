@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import hmac
 from collections.abc import Callable
 
 from .health import HealthState
 from .picker import NodePicker
-
+from .sticky import StickySessionStore
 
 class Gateway:
     def __init__(
@@ -24,6 +25,8 @@ class Gateway:
         max_active_connections: int = 64,
         proxy_username: str = "hopline",
         proxy_password: str = "",
+        sticky_ttl: float = 10 * 60,
+        sticky_store: StickySessionStore | None = None,
     ) -> None:
         if max_active_connections <= 0:
             raise ValueError("max_active_connections must be positive")
@@ -44,6 +47,7 @@ class Gateway:
         self._proxy_username = proxy_username
         self._active_connections: dict[str, int] = {node_id: 0 for node_id in generation_credentials}
         self._proxy_password = proxy_password
+        self._sticky = sticky_store or StickySessionStore(ttl=sticky_ttl)
         self._server: asyncio.AbstractServer | None = None
         self._tasks: set[asyncio.Task[None]] = set()
 
@@ -105,11 +109,17 @@ class Gateway:
             if auth_value is None:
                 await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
                 return
-            requested_node = self._route_from_auth(auth_value)
-            if requested_node is None:
+            route = self._route_from_auth(auth_value)
+            if route is None:
                 await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
                 return
+            requested_node, sticky_session = self._candidates_for_route(route)
             candidates = self._picker.candidates(requested_node)
+            if sticky_session is not None and requested_node != "rotate":
+                candidates += [
+                    node_id for node_id in self._picker.candidates("rotate")
+                    if node_id not in candidates
+                ]
             if not candidates:
                 await self._respond(client, b"HTTP/1.1 503 Service Unavailable\r\n\r\n")
                 return
@@ -133,6 +143,8 @@ class Gateway:
                     await upstream.drain()
                     response = await asyncio.wait_for(self._read_response(upstream_reader), 3)
                     if response.startswith(b"HTTP/1.1 200"):
+                        if sticky_session is not None:
+                            self._sticky.bind(sticky_session, node_id)
                         if self._record_success is not None:
                             self._record_success(node_id)
                         await self._respond(client, b"HTTP/1.1 200 Connection Established\r\n\r\n")
@@ -205,7 +217,7 @@ class Gateway:
                 while data := await reader.read(65536):
                     writer.write(data)
                     await writer.drain()
-            except (ConnectionError, asyncio.IncompleteReadError):
+            except (ConnectionError, asyncio.IncompleteReadError, OSError):
                 pass
             finally:
                 try:
@@ -213,7 +225,17 @@ class Gateway:
                 except (AttributeError, OSError, RuntimeError):
                     pass
 
-        await asyncio.gather(pipe(client_reader, upstream_writer), pipe(upstream_reader, client_writer))
+        tasks = [
+            asyncio.create_task(pipe(client_reader, upstream_writer)),
+            asyncio.create_task(pipe(upstream_reader, client_writer)),
+        ]
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     @staticmethod
     async def _read_headers(reader: asyncio.StreamReader) -> tuple[str, str, dict[str, str]]:
@@ -236,7 +258,7 @@ class Gateway:
         writer.write(response)
         await writer.drain()
 
-    def _route_from_auth(self, value: str | None) -> str | None:
+    def _route_from_auth(self, value: str | None) -> tuple[str, str | None] | None:
         if value is None or not value.lower().startswith("basic "):
             return None
         try:
@@ -247,12 +269,24 @@ class Gateway:
         if not separator or not username or not hmac.compare_digest(password, self._proxy_password):
             return None
         if username == self._proxy_username or username == "rotate":
-            return "rotate"
+            return "rotate", None
+        if username.startswith("sticky-") and username[7:]:
+            return "rotate", username[7:]
         if username in self._generation_credentials:
-            return username
+            return username, None
         if username.startswith("node-") and username[5:] in self._generation_credentials:
-            return username[5:]
+            return username[5:], None
         return None
+
+    def _candidates_for_route(self, route: tuple[str, str | None]) -> tuple[str, str | None]:
+        requested_node, sticky_session = route
+        if sticky_session is None:
+            return requested_node, None
+        bound = self._sticky.lookup(
+            sticky_session,
+            eligible=lambda node_id: bool(self._picker.candidates(node_id)),
+        )
+        return (bound or "rotate"), sticky_session
 
     @staticmethod
     def _target_host_port(target: str) -> tuple[str, int]:
