@@ -71,6 +71,24 @@ python3 -m hopline run --config hopline.toml
 
 Template systemd tersedia di `packaging/hopline.service`. Service memakai user terpisah, `NoNewPrivileges`, `PrivateTmp`, filesystem protection, dan hanya `/var/lib/hopline` writable.
 
+## Control API
+
+Daemon `run` membuka API localhost di `127.0.0.1:18772`:
+
+```bash
+python3 -m hopline status --json
+python3 -m hopline nodes --json
+```
+
+Endpoint HTTP read-only:
+
+```text
+GET /status
+GET /nodes
+```
+
+Health state dasar: `healthy`, `degraded`, `dead`, dan `quarantine`. Response hanya memuat node ID, protocol, host, port, nama, state, counters, dan latency; credential tidak pernah dikembalikan.
+
 ## Batasan
 
 - Bukan VPN level jaringan.

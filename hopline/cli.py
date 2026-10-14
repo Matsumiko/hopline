@@ -29,6 +29,11 @@ def _parser() -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", help="Check local Hopline prerequisites")
     doctor.add_argument("--db", default=DEFAULT_DB, help="SQLite registry path")
     doctor.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
+    for name, path in (("status", "/status"), ("nodes", "/nodes")):
+        sub = subparsers.add_parser(name, help=f"Read control API {name}")
+        sub.add_argument("--host", default="127.0.0.1")
+        sub.add_argument("--port", type=int, default=18772)
+        sub.add_argument("--json", action="store_true", dest="as_json")
     run = subparsers.add_parser("run", help="Run the subscription scheduler")
     run.add_argument("--config", default=os.environ.get("HOPLINE_CONFIG", "hopline.toml"), help="TOML config path")
     run.add_argument("--once", action="store_true", help="sync once then exit")
@@ -47,9 +52,9 @@ def _require_url(url: str | None) -> str:
 def _emit(payload: dict[str, object], as_json: bool) -> None:
     if as_json:
         print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
-        return
-    for key, value in payload.items():
-        print(f"{key}: {value}")
+    else:
+        for key, value in payload.items():
+            print(f"{key}: {value}")
 
 
 async def _sync(url: str, database: str) -> dict[str, object]:
@@ -73,10 +78,30 @@ def _doctor(database: str) -> dict[str, object]:
     return {"database": str(db_path), "database_exists": db_path.exists(), "nodes": nodes, "schema_version": schema, "sing_box": binary is not None, "sing_box_path": binary or ""}
 
 
+async def _control_request(host: str, port: int, path: str) -> dict[str, object]:
+    reader, writer = await asyncio.open_connection(host, port)
+    try:
+        writer.write(f"GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".encode())
+        await writer.drain()
+        response = await reader.read()
+        header, body = response.split(b"\r\n\r\n", 1)
+        status = int(header.split(b" ", 2)[1])
+        if status != 200:
+            raise RuntimeError(f"control API returned HTTP {status}")
+        return json.loads(body)
+    finally:
+        writer.close()
+        await writer.wait_closed()
+
+
 async def _run_daemon(config_path: str, once: bool) -> int:
+    from .control import ControlServer
+
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
     scheduler = SubscriptionScheduler(Syncer(registry), config.subscriptions, interval=config.interval, jitter=config.jitter)
+    control = ControlServer(registry)
+    await control.start()
     loop = asyncio.get_running_loop()
     for signal_name in ("SIGINT", "SIGTERM"):
         signal_number = getattr(signal, signal_name, None)
@@ -85,11 +110,12 @@ async def _run_daemon(config_path: str, once: bool) -> int:
     try:
         if once:
             results = await scheduler.sync_once()
-            print(json.dumps({"sources": len(results), "nodes": len(registry.list_nodes()), "once": True}, sort_keys=True))
+            print(json.dumps({"sources": len(results), "nodes": len(registry.list_nodes()), "control_port": control.port, "once": True}, sort_keys=True))
             return 0 if results and registry.list_nodes() else 2
         await scheduler.run()
         return 0
     finally:
+        await control.stop()
         registry.close()
 
 
@@ -102,10 +128,14 @@ def main(argv: list[str] | None = None) -> int:
             payload = _doctor(args.db)
             _emit(payload, args.as_json)
             return 0 if payload["sing_box"] else 2
+        if args.command in {"status", "nodes"}:
+            payload = asyncio.run(_control_request(args.host, args.port, "/" + args.command))
+            _emit(payload, args.as_json)
+            return 0
         url = _require_url(args.url)
         payload = asyncio.run(_sync(url, args.db))
         _emit(payload, args.as_json)
         return 0 if payload["nodes"] else 2
-    except (OSError, ValueError, RuntimeError) as error:
+    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
         print(f"hopline: {error}", file=sys.stderr)
         return 2

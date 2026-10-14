@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, dan systemd unit tersedia; health/control plane belum tersedia.
-- **Last verified:** 29 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, dan systemd unit verify lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; active picker/failover belum tersedia.
+- **Last verified:** 32 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, dan control API smoke lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,12 +26,12 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan health checker passive/active dan control-plane groundwork.
+- Melanjutkan Fase 1 dengan health-aware picker/failover dan control-plane hardening.
 
 ## Berikutnya
 
-1. Tambahkan health checker passive/active setelah node registry stabil.
-2. Tambahkan control API dan CLI `nodes`/`status`.
+1. Integrasikan health state ke picker dan failover sebelum byte diteruskan.
+2. Tambahkan active probe scheduler dengan target konfigurasi.
 3. Tambahkan load test untuk batas koneksi aktif per node.
 4. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
 5. Siapkan systemd install/runbook setelah review service host.
@@ -61,18 +61,18 @@ F1 test suite:
 ```text
 python3 -m py_compile hopline/*.py tests/*.py
 python3 -W error::ResourceWarning -m unittest discover -s tests -v
-Ran 29 tests — OK
+Ran 32 tests — OK
 ```
 
-Sync integration mencakup base64/share-link, Clash YAML, sing-box JSON, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, redacted headers, removed hysteresis tiga sync, scheduler sync, CLI contract, persistent TOML permission validation, daemon once, dan generation apply.
+Health/control integration mencakup passive success/failure transitions, active probe seam, SQLite health persistence, localhost-only `/status` dan `/nodes`, CLI `status`/`nodes`, dan response redaction.
+
+Sync integration mencakup base64/share-link, Clash YAML, sing-box JSON, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, removed hysteresis tiga sync, scheduler sync, CLI contract, persistent TOML permission validation, daemon once, dan generation apply.
 
 Live subscription smoke: `parsed=100`, `invalid=0`, protokol `ss/trojan/vless/vmess`; body tidak dicetak dan tidak disimpan ke repository.
 
-Generated config 100 node lulus `sing-box check`.
+Control smoke: `/status` menghasilkan JSON `nodes=1`, `schema_version=1`, tanpa credential.
 
-CLI/daemon smoke lulus: help command, `doctor --json`, `sync --json` live, `run --once` live menghasilkan 100 node, missing URL error pada stderr, dan `systemd-analyze verify` menerima unit.
-
-Gate F1: **in progress**. Runtime, fetch, snapshot, structured parser, hysteresis, scheduler, CLI, persistent config, dan systemd unit lulus; health/control plane, acceptance melalui `HTTPS_PROXY`, dan host installation runbook belum selesai.
+Gate F1: **in progress**. Health registry dan control API dasar lulus; health-aware picker/failover, active probe scheduler, acceptance melalui `HTTPS_PROXY`, dan host installation runbook belum selesai.
 
 ## Validasi Dokumentasi Baseline
 
@@ -86,7 +86,7 @@ Gate F1: **in progress**. Runtime, fetch, snapshot, structured parser, hysteresi
 | Item | Status | Dampak | Cara membuka |
 |---|---|---|---|
 | Reload SIGHUP sing-box 1.14.3 menutup stream aktif | mitigated | In-place reload melanggar invariant active stream | Gunakan generation subprocess/listener berbeda; jangan SIGHUP saat stream aktif |
-| Health/control plane belum tersedia | open | F1 belum memilih node berdasarkan health atau menyediakan status API | Implementasikan checker dan control API |
+| Health-aware picker/failover belum tersedia | open | Health state belum memengaruhi pemilihan node runtime | Integrasikan picker sebelum forwarding byte client |
 | Batas koneksi aktif per node belum ditetapkan | deferred | Parameter operasi belum final | Load test F4 |
 | Target provider probe belum dipilih | deferred | Active probe F2 belum memiliki target final | Putuskan sebelum F2 |
 

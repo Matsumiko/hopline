@@ -55,6 +55,15 @@ class SQLiteRegistry:
                 missing_syncs INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY(node_id, source)
             );
+            CREATE TABLE IF NOT EXISTS health (
+                node_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+                state TEXT NOT NULL,
+                successes INTEGER NOT NULL DEFAULT 0,
+                failures INTEGER NOT NULL DEFAULT 0,
+                latency_ms REAL,
+                last_error TEXT,
+                updated_at REAL NOT NULL
+            );
             """
         )
         self._ensure_columns()
@@ -85,6 +94,38 @@ class SQLiteRegistry:
             "FROM nodes ORDER BY id"
         ).fetchall()
         return [self._node_from_row(row) for row in rows]
+
+    def health_record(self, node_id: str):
+        from .health import HealthRecord, HealthState
+
+        row = self.connection.execute(
+            "SELECT node_id, state, successes, failures, latency_ms, last_error, updated_at FROM health WHERE node_id = ?",
+            (node_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return HealthRecord(
+            row["node_id"], HealthState(row["state"]), row["successes"],
+            row["failures"], row["latency_ms"], row["last_error"], row["updated_at"],
+        )
+
+    def save_health(self, node_id: str, state, successes: int, failures: int, latency_ms: float | None, last_error: str | None):
+        import time
+
+        updated_at = time.time()
+        with self.connection:
+            self.connection.execute(
+                """INSERT INTO health(node_id, state, successes, failures, latency_ms, last_error, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(node_id) DO UPDATE SET state=excluded.state, successes=excluded.successes,
+                failures=excluded.failures, latency_ms=excluded.latency_ms, last_error=excluded.last_error,
+                updated_at=excluded.updated_at""",
+                (node_id, str(state), successes, failures, latency_ms, last_error, updated_at),
+            )
+        return self.health_record(node_id)
+
+    def list_health(self):
+        return [self.health_record(row[0]) for row in self.connection.execute("SELECT node_id FROM health ORDER BY node_id")]
 
     def snapshot_ids(self) -> tuple[str, ...]:
         return tuple(row[0] for row in self.connection.execute("SELECT id FROM nodes ORDER BY id"))

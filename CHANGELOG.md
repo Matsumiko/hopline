@@ -104,3 +104,15 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Dua puluh enam test lulus tanpa `ResourceWarning`.
 - Fixture Clash YAML dan sing-box JSON berhasil diparse; node invalid diabaikan.
 - Hysteresis mempertahankan node pada sync pertama/kedua dan menghapusnya setelah sync ketiga.
+
+### Added
+
+- Health registry dengan state `healthy`, `degraded`, `dead`, dan `quarantine`.
+- Passive success/failure feedback dan injected active probe seam.
+- Localhost-only control API `GET /status` dan `GET /nodes`.
+- CLI read-only `status` dan `nodes`.
+
+### Verified
+
+- Tiga puluh dua test lulus tanpa `ResourceWarning`.
+- Control API smoke menghasilkan status JSON tanpa credential node.
