@@ -5,6 +5,7 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 ## [Unreleased]
 
 ### Added
+- Full suite terbaru menjalankan 87 test tanpa `ResourceWarning`; smoke ephemeral menguji VLESS, VMess, Trojan, dan Shadowsocks dengan authenticated HTTP 200 serta invalid/missing credential HTTP 407 tanpa menyentuh service production. Load smoke menghasilkan 4 koneksi diterima dan 12 ditolak dari 16 concurrent; HTTPS proxy acceptance mengembalikan payload `pong`.
 - Gateway sekarang mewajibkan credential lokal `[auth]` sebelum memilih node. Username client (`hopline` secara default) dan password lokal tidak diteruskan ke sing-box; credential node tetap internal. Smoke ephemeral memverifikasi credential benar, salah, dan kosong.
 - Memperbaiki collision port multi-generation: sing-box generation sekarang melewati gateway/control/metrics port, dan HTTP active probe memakai port generation aktif. Target production probe diganti ke `http://cp.cloudflare.com/`.
 - Memperbaiki health lifecycle production: daemon sekarang mengaktifkan URL probe ketika `[health].targets` dikonfigurasi, dan scheduler memakai bounded concurrency default 10. Node baru tidak lagi tertahan sebagai `unknown`; production pass menurunkan unknown dari 1.031 menjadi 3 dari 1.535 node.
