@@ -25,11 +25,14 @@ def _node_id(
     path: str | None,
     host: str | None,
     method: str | None,
+    plugin: str | None = None,
+    plugin_opts: str | None = None,
 ) -> str:
     identity = "|".join(
         (
             protocol, server.lower(), str(port), credential, security,
             sni or "", transport_type, path or "", host or "", method or "",
+            plugin or "", plugin_opts or "",
         )
     )
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
@@ -52,7 +55,18 @@ def parse_share_link(link: str, *, source: str | None = None) -> Node:
     host = _query_one(query, "host")
     name = unquote(parsed.fragment) or None
     method: str | None = None
-
+    plugin: str | None = None
+    plugin_opts: str | None = None
+    security_option = _query_one(query, "encryption") or _query_one(query, "security") or "none"
+    global_padding_raw = _query_one(query, "global_padding")
+    authenticated_length_raw = _query_one(query, "authenticated_length")
+    global_padding = None if global_padding_raw is None else global_padding_raw.lower() == "true"
+    authenticated_length = None if authenticated_length_raw is None else authenticated_length_raw.lower() == "true"
+    plugin_value = _query_one(query, "plugin")
+    if plugin_value:
+        plugin_parts = plugin_value.split(";", 1)
+        plugin = plugin_parts[0] or None
+        plugin_opts = plugin_parts[1] if len(plugin_parts) == 2 else None
     if protocol == "ss":
         if not parsed.username:
             raise ValueError("Shadowsocks link requires encoded method and password")
@@ -73,7 +87,7 @@ def parse_share_link(link: str, *, source: str | None = None) -> Node:
 
     node_id = _node_id(
         protocol, parsed.hostname, parsed.port, credential, security,
-        sni, transport_type, path, host, method,
+        sni, transport_type, path, host, method, plugin, plugin_opts,
     )
     return Node(
         id=node_id,
@@ -87,6 +101,11 @@ def parse_share_link(link: str, *, source: str | None = None) -> Node:
         path=path,
         host=host,
         method=method,
+        plugin=plugin,
+        plugin_opts=plugin_opts,
+        security=security_option,
+        global_padding=global_padding,
+        authenticated_length=authenticated_length,
         name=name,
     )
 
@@ -165,9 +184,15 @@ def _parse_structured_node(entry: dict[str, object], *, source: str | None) -> N
         headers = ws_data.get("headers")
         host = headers.get("Host") if isinstance(headers, dict) else host
     name = str(entry.get("tag", entry.get("name", ""))) or None
+    security = str(entry.get("security", "tls" if tls else "none"))
+    global_padding = entry.get("global_padding")
+    authenticated_length = entry.get("authenticated_length")
     return Node(
-        id=_node_id(protocol, server, port, credential, "tls" if tls else "none", sni, transport_type, str(path) if path else None, str(host) if host else None, method),
+        id=_node_id(protocol, server, port, credential, security, sni, transport_type, str(path) if path else None, str(host) if host else None, method),
         protocol=protocol, server=server, port=port, uuid=credential, tls=tls,
         sni=sni, transport_type=transport_type, path=str(path) if path else None,
-        host=str(host) if host else None, method=method, name=name,
+        host=str(host) if host else None, method=method, security=security,
+        global_padding=bool(global_padding) if global_padding is not None else None,
+        authenticated_length=bool(authenticated_length) if authenticated_length is not None else None,
+        name=name,
     )

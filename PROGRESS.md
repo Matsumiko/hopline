@@ -5,7 +5,7 @@
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
 - **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, optional localhost Prometheus metrics, Linux installation runbook, hardened systemd unit, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, health registry, localhost control API, serta daemon wiring engine/gateway tersedia; staging runtime lulus dengan subscription nyata dan sing-box system-wide.
-- **Last verified:** 46 test F1, subscription nyata ter-fetch dan ter-parse 301 node (SS 75, Trojan 75, VLESS 76, VMess 75), daemon systemd active dengan 601 registry nodes, control/metrics/listener checks, CONNECT handshake, TCP reachability 600/601, dan satu sampel Trojan menghasilkan IP egress `131.186.63.89`; tanpa menampilkan credential.
+- **Last verified:** 47 test F1, subscription nyata ter-fetch dan ter-parse, parser/generator mempertahankan Shadowsocks `v2ray-plugin` dan metadata VMess, daemon systemd active dengan 901 registry nodes setelah reparse, control/metrics/listener checks, direct export SS melalui Hopline menghasilkan egress `2a01:4f8:c010:6c95::1`, sementara direct export VLESS/VMess masih timeout.
 
 ## Selesai
 
@@ -24,12 +24,12 @@
 - Smoke node VLESS live lulus secara ephemeral: IP VPS `103.247.23.141`, IP egress node `131.186.63.89`, dan runtime log tidak mengandung credential.
 - Config live membutuhkan penghapusan field legacy `outbounds[0].encryption` agar diterima sing-box 1.14.3; config asli tidak diubah.
 
-- Menentukan kestabilan egress Trojan dan memperbaiki/menandai transport SS, VLESS, dan VMess yang gagal.
+- Menentukan apakah parameter VLESS/VMess export juga perlu penyesuaian transport/runtime tambahan.
 
 ## Berikutnya
 
-1. Jalankan sampel egress berulang pada node Trojan yang berhasil dan ukur success rate per protocol.
-2. Periksa parameter transport node gagal terhadap format subscription/provider.
+1. Uji VLESS/VMess export dengan trace sing-box dan bandingkan dengan runtime Nekobox.
+2. Jalankan sampel egress berulang pada SS plugin yang berhasil.
 3. Tetapkan production provider probe target dan retention metrics.
 
 ## Bukti
@@ -72,7 +72,7 @@ Load smoke: `concurrency=16`, `limit=4`, `admitted=4`, `rejected=12`.
 
 HTTPS proxy acceptance: CONNECT gateway → upstream proxy → local origin, payload `pong` kembali end-to-end.
 
-Gate F1: **in progress**. Subscription nyata tersinkron dan daemon menjalankan 601 node. CONNECT dan TCP reachability lulus; satu uji Trojan berhasil mengembalikan IP egress `131.186.63.89`, tetapi hasil belum stabil pada pengulangan dan SS/VLESS/VMess belum berhasil. Production go/no-go belum lulus.
+Gate F1: **in progress**. Fix `v2ray-plugin` sudah membuat direct export Shadowsocks Nekobox berhasil melalui Hopline dan menghasilkan egress IPv6 `2a01:4f8:c010:6c95::1`. Direct export VLESS/VMess masih timeout; production go/no-go belum lulus.
 - Seluruh file yang dirujuk PRD dan README tersedia.
 - Link ke indeks ADR dan ADR-001 tersedia.
 - Placeholder diagram arsitektur di PRD diganti dengan diagram Mermaid yang memuat gateway, picker, sing-box, syncer, checker, scorer, dan SQLite.
@@ -80,8 +80,8 @@ Gate F1: **in progress**. Subscription nyata tersinkron dan daemon menjalankan 6
 
 ## Blocker / Risiko Aktif
 
-| Egress belum stabil per protocol | open | Satu Trojan sample sukses, pengulangan gagal timeout; SS/VLESS/VMess sample gagal HTTP 000 | Uji sampel lebih besar, korelasikan node/transport, dan validasi parameter provider |
-| Registry masih menahan node lama | expected | Hysteresis menghapus node setelah tiga snapshot hilang; total 601 mencakup snapshot nyata dan node lama | Biarkan tiga sync berikutnya atau reset state staging sebelum baseline baru |
+| VLESS/VMess export masih timeout | open | Config langsung Nekobox dan Hopline sama-sama timeout pada sampel yang diberikan; SS plugin sudah berhasil setelah parser fix | Ambil trace sing-box untuk membedakan endpoint, TLS, atau parameter transport |
+| Egress belum stabil per protocol | open | SS plugin sukses, VLESS/VMess belum | Uji sampel lebih besar dan validasi parameter provider |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
 
 

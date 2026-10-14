@@ -20,8 +20,19 @@ def _outbound(node: Node) -> dict[str, Any]:
     elif node.protocol == "ss":
         outbound["method"] = node.method or "chacha20-ietf-poly1305"
         outbound["password"] = node.uuid
+        if node.plugin:
+            outbound["plugin"] = node.plugin
+        if node.plugin_opts:
+            outbound["plugin_opts"] = node.plugin_opts
     else:
         raise ValueError(f"unsupported outbound protocol: {node.protocol}")
+    if node.protocol == "vmess":
+        if node.security:
+            outbound["security"] = node.security
+        if node.global_padding is not None:
+            outbound["global_padding"] = node.global_padding
+        if node.authenticated_length is not None:
+            outbound["authenticated_length"] = node.authenticated_length
     if node.tls and node.protocol != "ss":
         outbound["tls"] = {"enabled": True, "server_name": node.sni or node.server}
     if node.transport_type and node.transport_type != "tcp" and node.protocol != "ss":

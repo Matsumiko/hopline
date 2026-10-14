@@ -193,3 +193,9 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 - Real subscription runtime held 601 registry nodes; TCP reachability was 600/601.
 - Protocol sample: one Trojan node returned egress IP `131.186.63.89`; sampled SS, VLESS, and VMess nodes failed HTTPS relay, and repeated Trojan attempts timed out. Production egress stability remains open.
+
+### Fixed
+
+- Preserve Shadowsocks `v2ray-plugin` and its WebSocket/TLS options from share links through SQLite registry and generated sing-box outbound config.
+- Preserve VMess `security`, `global_padding`, and `authenticated_length` metadata.
+- Verified the user-provided Nekobox Shadowsocks export through Hopline; it returned egress IPv6 `2a01:4f8:c010:6c95::1`.

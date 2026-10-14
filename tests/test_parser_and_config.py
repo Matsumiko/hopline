@@ -1,7 +1,7 @@
 import unittest
 
 from hopline.models import Node
-from hopline.parser import parse_vless
+from hopline.parser import parse_share_link, parse_vless
 from hopline.singbox import build_config
 
 
@@ -73,6 +73,23 @@ class ParserConfigTests(unittest.TestCase):
         self.assertEqual(config["outbounds"][0]["tag"], "node-a")
         self.assertEqual(config["outbounds"][1]["tag"], "node-b")
 
+    def test_shadowsocks_v2ray_plugin_is_preserved_for_singbox(self) -> None:
+        link = (
+            "ss://bm9uZTphMGJlZGNkOS01OTQ4LTQzNzItODlkNy05MTlkNTJkYmRmOTM="
+            "@nautica-v2ray-20261011.nautica-v2ray-20261011.workers.dev:443"
+            "?plugin=v2ray-plugin%3Btls%3Bmux%3D0%3Bmode%3Dwebsocket%3Bpath%3D%2F185.82.218.224-443"
+            "%3Bhost%3Dnautica-v2ray-20261011.nautica-v2ray-20261011.workers.dev"
+        )
+        node = parse_share_link(link)
+        self.assertEqual(node.plugin, "v2ray-plugin")
+        self.assertEqual(
+            node.plugin_opts,
+            "tls;mux=0;mode=websocket;path=/185.82.218.224-443;host="
+            "nautica-v2ray-20261011.nautica-v2ray-20261011.workers.dev",
+        )
+        outbound = build_config([node], listen_port=18771)["outbounds"][0]
+        self.assertEqual(outbound["plugin"], "v2ray-plugin")
+        self.assertEqual(outbound["plugin_opts"], node.plugin_opts)
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,6 +44,7 @@ class SingBoxEngine:
             (
                 node.id, node.protocol, node.server, node.port, node.uuid,
                 node.tls, node.sni, node.transport_type, node.path, node.host, node.method,
+                node.plugin, node.plugin_opts, node.security, node.global_padding, node.authenticated_length,
             )
             for node in sorted(nodes, key=lambda item: item.id)
         )

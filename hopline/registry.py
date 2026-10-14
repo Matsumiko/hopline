@@ -33,6 +33,11 @@ class SQLiteRegistry:
                 path TEXT,
                 host TEXT,
                 method TEXT,
+                plugin TEXT,
+                plugin_opts TEXT,
+                security TEXT,
+                global_padding INTEGER,
+                authenticated_length INTEGER,
                 name TEXT
             );
             CREATE TABLE IF NOT EXISTS subscriptions (
@@ -74,8 +79,14 @@ class SQLiteRegistry:
             "nodes": {row[1] for row in self.connection.execute("PRAGMA table_info(nodes)")},
             "subscriptions": {row[1] for row in self.connection.execute("PRAGMA table_info(subscriptions)")},
         }
-        if "method" not in tables["nodes"]:
-            self.connection.execute("ALTER TABLE nodes ADD COLUMN method TEXT")
+        node_columns = (
+            ("path", "TEXT"), ("host", "TEXT"), ("method", "TEXT"),
+            ("plugin", "TEXT"), ("plugin_opts", "TEXT"), ("security", "TEXT"),
+            ("global_padding", "INTEGER"), ("authenticated_length", "INTEGER"),
+        )
+        for name, definition in node_columns:
+            if name not in tables["nodes"]:
+                self.connection.execute(f"ALTER TABLE nodes ADD COLUMN {name} {definition}")
         for name, definition in (("body", "BLOB"), ("etag", "TEXT"), ("last_modified", "TEXT")):
             if name not in tables["subscriptions"]:
                 self.connection.execute(f"ALTER TABLE subscriptions ADD COLUMN {name} {definition}")
@@ -90,7 +101,8 @@ class SQLiteRegistry:
 
     def list_nodes(self) -> list[Node]:
         rows = self.connection.execute(
-            "SELECT id, protocol, server, port, uuid, tls, sni, transport_type, path, host, method, name "
+            "SELECT id, protocol, server, port, uuid, tls, sni, transport_type, path, host, method, "
+            "plugin, plugin_opts, security, global_padding, authenticated_length, name "
             "FROM nodes ORDER BY id"
         ).fetchall()
         return [self._node_from_row(row) for row in rows]
@@ -168,15 +180,22 @@ class SQLiteRegistry:
             for node in incoming.values():
                 self.connection.execute(
                     """INSERT INTO nodes(
-                        id, protocol, server, port, uuid, tls, sni, transport_type, path, host, method, name
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        id, protocol, server, port, uuid, tls, sni, transport_type, path, host, method,
+                        plugin, plugin_opts, security, global_padding, authenticated_length, name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET protocol=excluded.protocol, server=excluded.server,
                     port=excluded.port, uuid=excluded.uuid, tls=excluded.tls, sni=excluded.sni,
                     transport_type=excluded.transport_type, path=excluded.path, host=excluded.host,
-                    method=excluded.method, name=excluded.name""",
+                    method=excluded.method, plugin=excluded.plugin, plugin_opts=excluded.plugin_opts,
+                    security=excluded.security, global_padding=excluded.global_padding,
+                    authenticated_length=excluded.authenticated_length, name=excluded.name""",
                     (
                         node.id, node.protocol, node.server, node.port, node.uuid, int(node.tls),
-                        node.sni, node.transport_type, node.path, node.host, node.method, node.name,
+                        node.sni, node.transport_type, node.path, node.host, node.method,
+                        node.plugin, node.plugin_opts, node.security,
+                        None if node.global_padding is None else int(node.global_padding),
+                        None if node.authenticated_length is None else int(node.authenticated_length),
+                        node.name,
                     ),
                 )
                 self.connection.execute(
@@ -223,5 +242,9 @@ class SQLiteRegistry:
             id=row["id"], protocol=row["protocol"], server=row["server"], port=row["port"],
             uuid=row["uuid"], tls=bool(row["tls"]), sni=row["sni"],
             transport_type=row["transport_type"], path=row["path"], host=row["host"],
-            method=row["method"], name=row["name"],
+            method=row["method"], plugin=row["plugin"], plugin_opts=row["plugin_opts"],
+            security=row["security"],
+            global_padding=None if row["global_padding"] is None else bool(row["global_padding"]),
+            authenticated_length=None if row["authenticated_length"] is None else bool(row["authenticated_length"]),
+            name=row["name"],
         )
