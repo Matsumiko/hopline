@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 class HoplineConfig:
     database: str
     subscriptions: tuple[str, ...]
+    static_nodes: tuple[str, ...] = ()
     interval: float = 45 * 60
     jitter: float = 0
     gateway_host: str = "127.0.0.1"
@@ -65,8 +66,18 @@ class HoplineConfig:
             if parsed.scheme not in {"http", "https"} or not parsed.hostname:
                 raise ValueError("subscription URL must be an HTTP(S) URL")
             urls.append(url)
-        if not urls:
-            raise ValueError("at least one subscription URL is required")
+        static_entries = document.get("static_nodes", [])
+        if not isinstance(static_entries, list):
+            raise ValueError("static_nodes must be an array")
+        static_nodes: list[str] = []
+        for entry in static_entries:
+            node = str(entry)
+            parsed = urlsplit(node)
+            if parsed.scheme not in {"vless", "vmess", "trojan", "ss"} or not parsed.hostname:
+                raise ValueError("static node must be a supported share link")
+            static_nodes.append(node)
+        if not urls and not static_nodes:
+            raise ValueError("at least one subscription URL or static node is required")
 
         health = document.get("health", {})
         if not isinstance(health, dict):
@@ -110,6 +121,7 @@ class HoplineConfig:
         return cls(
             database=database,
             subscriptions=tuple(urls),
+            static_nodes=tuple(static_nodes),
             interval=interval,
             jitter=jitter,
             gateway_host=gateway_host,

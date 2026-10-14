@@ -5,7 +5,7 @@
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
 - **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, optional localhost Prometheus metrics, Linux installation runbook, hardened systemd unit, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, health registry, localhost control API, serta daemon wiring engine/gateway tersedia; staging runtime lulus dengan subscription nyata dan sing-box system-wide.
-- **Last verified:** 47 test F1, subscription nyata ter-fetch dan ter-parse, parser/generator mempertahankan Shadowsocks `v2ray-plugin` dan metadata VMess, daemon systemd active dengan 901 registry nodes setelah reparse, control/metrics/listener checks, direct export SS melalui Hopline menghasilkan egress `2a01:4f8:c010:6c95::1`, sementara direct export VLESS/VMess masih timeout.
+- **Last verified:** 51 test F1, subscription nyata ter-fetch dan ter-parse menjadi 300 node (75 per protocol), parser/generator mempertahankan WS/TLS, VLESS `packet_encoding`/`flow`, VMess `alter_id`, Reality/uTLS/ALPN metadata, gRPC `service_name`, `h2` mapping, dan WebSocket early-data; generated parity config lulus `sing-box check`, daemon systemd tetap active dengan 901 registry nodes; smoke egress VLESS masih timeout dan VMess masih `SSL_ERROR_SYSCALL`.
 
 ## Selesai
 
@@ -73,15 +73,30 @@ Load smoke: `concurrency=16`, `limit=4`, `admitted=4`, `rejected=12`.
 HTTPS proxy acceptance: CONNECT gateway → upstream proxy → local origin, payload `pong` kembali end-to-end.
 
 Gate F1: **in progress**. Fix `v2ray-plugin` sudah membuat direct export Shadowsocks Nekobox berhasil melalui Hopline dan menghasilkan egress IPv6 `2a01:4f8:c010:6c95::1`. Direct export VLESS/VMess masih timeout; production go/no-go belum lulus.
+
+Parity NekoBox terbaru: source NekoBox `TrojanVLESSBean.cpp`, `VMessBean.cpp`, dan `Bean2CoreObj_box.cpp` menjadi acuan untuk Reality/uTLS, ALPN, gRPC `service_name`, `h2→http`, flow normalization, dan WS early-data. Hopline mengadopsi field upstream-compatible; fork-only xhttp/TLS fragment tidak diaktifkan.
+Smoke terbaru dengan source Hopline: subscription 300 node / invalid 0; generated VLESS dan VMess config masing-masing `sing-box check=0`; VLESS relay timeout dan VMess relay `SSL_ERROR_SYSCALL` tetap terjadi pada sampel provider yang sama.
 - Seluruh file yang dirujuk PRD dan README tersedia.
 - Link ke indeks ADR dan ADR-001 tersedia.
 - Placeholder diagram arsitektur di PRD diganti dengan diagram Mermaid yang memuat gateway, picker, sing-box, syncer, checker, scorer, dan SQLite.
+
+Deployment VPS authorized: Debian 12, systemd, `/usr/local/bin/sing-box` 1.14.3, private `/etc/hopline/hopline.toml`, and four `static_nodes` from `.env`; service active with localhost gateway/control/metrics listeners. Remote smoke loaded four nodes. Shadowsocks returned egress IP `139.162.133.162`; VLESS, VMess, and Trojan returned HTTP 000/SSL relay failures on this VPS and remain unproven.
+
+DNS audit: generation config now declares `dns-local` as the default resolver and explicitly assigns it to relay/node outbounds. NekoBox's `dns-remote=8.8.8.8` detoured through one `proxy` outbound was not copied globally: Hopline selects among multiple outbounds, so that design would be node-incorrect and potentially recursive. Target CONNECT hostnames are left to the selected protocol outbound rather than resolved by Hopline Python.
+- Implemented DNS split in generated config: relay/node domains use `dns-direct`; `dns-remote` uses `8.8.8.8` through `proxy-auto`; mixed inbound applies `sniff` and `hijack-dns`; node outbounds bootstrap through `dns-direct`.
+- Targeted parser/config tests passed (9 tests), `tools/smoke_config.py` passed, and ephemeral egress smoke returned HTTP 200 for VLESS, VMess, Trojan, and Shadowsocks. Production service was not changed or restarted.
+- Refined target DNS routing to one `dns-remote-<node-id>` per node, with DNS rules matched by `auth_user` and direct detour to that node outbound. Inbound usernames/passwords and CONNECT `auth_user` rules remain intact.
+- Per-node DNS regression tests, multi-node `sing-box check`, and ephemeral egress smoke passed for VLESS, VMess, Trojan, and Shadowsocks. Production service was not restarted.
+- `tools/smoke_ephemeral.py --fixture-dir . --timeout 20` passed: VLESS, VMess, Trojan, and Shadowsocks each returned authenticated HTTP 200 and missing-credential HTTP 407. DNS bootstrap checks passed and output reported `production_service_touched: false`.
+- The smoke runner starts only ephemeral sing-box and Hopline Gateway listeners; production service was not restarted or reconfigured.
+- Production deployment of commit `7b02aef` completed on the authorized Debian 12 VPS after artifact checksum verification, generated four-node `sing-box check`, and rollback backup creation. `hopline.service` restarted successfully and remained active with localhost listeners on ports 18770–18773.
+- Production gateway smoke passed: VLESS, VMess, Trojan, and Shadowsocks each returned HTTP 200 through `127.0.0.1:18770`; missing `Proxy-Authorization` returned HTTP 407. Control status reported 4 nodes healthy and metrics returned HTTP 200. Rollback tree remains available.
 - Validasi dokumentasi selesai sebelum eksperimen F0.
 
 ## Blocker / Risiko Aktif
 
-| VLESS/VMess export masih timeout | open | Config langsung Nekobox dan Hopline sama-sama timeout pada sampel yang diberikan; SS plugin sudah berhasil setelah parser fix | Ambil trace sing-box untuk membedakan endpoint, TLS, atau parameter transport |
-| Egress belum stabil per protocol | open | SS plugin sukses, VLESS/VMess belum | Uji sampel lebih besar dan validasi parameter provider |
+| VLESS/VMess export masih timeout | open | Parser/generator sekarang mempertahankan WS/TLS, SNI, host, path, VLESS `packet_encoding`, VMess `alter_id`; config lulus `sing-box check`, tetapi sampel egress tetap gagal | Bandingkan parameter node yang sama dengan export NekoBox lengkap dan ambil trace handshake sing-box |
+| Egress belum stabil per protocol | open | SS plugin sukses; VLESS timeout dan VMess `SSL_ERROR_SYSCALL` pada sampel terbaru | Uji endpoint/path yang sama dari NekoBox dan Hopline, lalu korelasikan hasil per transport |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
 
 

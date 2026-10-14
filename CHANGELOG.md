@@ -199,3 +199,23 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Preserve Shadowsocks `v2ray-plugin` and its WebSocket/TLS options from share links through SQLite registry and generated sing-box outbound config.
 - Preserve VMess `security`, `global_padding`, and `authenticated_length` metadata.
 - Verified the user-provided Nekobox Shadowsocks export through Hopline; it returned egress IPv6 `2a01:4f8:c010:6c95::1`.
+
+- Preserve VLESS `packet_encoding` and `flow`, VMess `alter_id`, and corresponding metadata through parser, SQLite registry, generation signature, and sing-box config generation.
+- Align VMess TLS detection with the link's `security` parameter instead of assuming every VMess link uses TLS.
+- Verified 49 tests and `sing-box check` for generated VLESS/VMess configs; live VLESS/VMess egress remains open because current samples still fail during relay.
+
+- Preserve Reality public key/short ID, uTLS fingerprint, ALPN, gRPC `service_name`, and transport metadata through structured parsing, SQLite persistence, generation signatures, and sing-box config generation.
+- Normalize VLESS flow suffix `-udp443`, map VMess `h2` to sing-box `http`, and omit legacy VLESS `encryption=none` from generated outbounds because sing-box 1.14.3 rejects that field.
+- Added regression coverage for Reality/gRPC/ALPN/flow and VMess h2 mappings. The full suite now passes 51 tests; a real subscription fetch parsed 300 nodes with zero invalid entries.
+- Generated VLESS and VMess samples both pass `sing-box check`. Live samples still do not prove egress: VLESS timed out and VMess returned `SSL_ERROR_SYSCALL` during relay.
+
+- Added `static_nodes` configuration for running direct VLESS, VMess, Shadowsocks, and Trojan share links without subscription synchronization.
+- Deployed Hopline to the authorized Debian 12 VPS with private static-node config, systemd supervision, localhost gateway/control/metrics listeners, and system-wide sing-box 1.14.3.
+- Remote smoke: four configured static nodes loaded; Shadowsocks returned egress IP `139.162.133.162`. VLESS, VMess, and Trojan remained unsuccessful on this VPS sample and were not marked healthy.
+
+- Generated sing-box configurations now declare `dns-local`, set it as the default domain resolver, and attach it explicitly to relay/node outbounds. A single global `8.8.8.8` resolver detoured through `proxy` was intentionally not added because it is unsafe for a multi-node pool and can create DNS loops.
+- Generated sing-box configurations now create one `dns-remote-<node-id>` server per node and match DNS rules by `auth_user`, so target DNS follows the same outbound selected for the authenticated CONNECT. Hopline inbound users, passwords, and `auth_user` outbound rules remain unchanged.
+- Regression, multi-node `sing-box check`, and ephemeral egress smoke passed for VLESS, VMess, Trojan, and Shadowsocks with per-node DNS detours.
+- Added `tools/smoke_ephemeral.py` for credential-safe VLESS WS/TLS, VMess WS/TLS, Trojan WS/TLS, and Shadowsocks egress checks. The runner validates direct node DNS bootstrap, authenticated CONNECT success, and `407` for missing credentials without touching the production service.
+- Gateway now returns `407 Proxy Authentication Required` when CONNECT has no `Proxy-Authorization`; `rotate` remains explicit and is not inferred from a missing header.
+- Production deployment verified on the authorized Debian 12 VPS: generated four-node config passed `sing-box check`, service restart stayed active, and gateway smoke returned HTTP 200 for VLESS, VMess, Trojan, and Shadowsocks plus HTTP 407 without proxy credentials.

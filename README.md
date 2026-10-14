@@ -52,9 +52,16 @@ python3 -m hopline sync --url "$HOPLINE_SUBSCRIPTION_URL" --db hopline.db --json
 
 `sync` menyimpan node dan metadata subscription ke SQLite. `test` mengambil dan mem-parse subscription tanpa menjalankan sing-box. `doctor` memeriksa schema registry, jumlah node, dan binary sing-box. Output `--json` hanya berisi metadata; credential node dan isi subscription tidak ditampilkan.
 
-Daemon memakai file TOML private (`0600`):
+Daemon memakai file TOML private (`0600`). Sumber node dapat berupa subscription HTTP(S) dan/atau `static_nodes` share link langsung. `static_nodes` menjalankan node satuan tanpa mencocokkannya ke subscription:
 
 ```toml
+static_nodes = [
+  "vless://...",
+  "vmess://...",
+  "ss://...",
+  "trojan://...",
+]
+
 [hopline]
 database = "/var/lib/hopline/hopline.db"
 interval = 2700
@@ -69,6 +76,8 @@ max_active_connections = 64
 [[subscriptions]]
 url = "https://example.invalid/subscription"
 ```
+
+`[[subscriptions]]` dapat dihilangkan jika hanya memakai `static_nodes`. Credential node harus tetap berada di file private.
 
 Jalankan sekali atau sebagai daemon:
 
@@ -115,7 +124,20 @@ Mode `http` membuka CONNECT ke mixed inbound sing-box dengan auth user node, lal
 
 Untuk Shadowsocks dengan `v2ray-plugin`, Hopline meneruskan opsi plugin ke sing-box. Ini diperlukan untuk node WS/TLS seperti export Nekobox; tanpa field tersebut, node terlihat sehat pada TCP tetapi gagal saat handshake protocol.
 
+### Strategi DNS
+
+Hopline mendefinisikan resolver `dns-direct` untuk hostname relay/node dan satu `dns-remote-<node-id>` per node untuk query target. Setiap resolver remote memakai `8.8.8.8` dengan `detour` langsung ke outbound node yang sama. Rule DNS mencocokkan `auth_user`, sehingga query dari credential node A mengikuti outbound node A; tidak ada selector global untuk DNS target. `auth_user` dan password inbound tetap dipakai untuk routing CONNECT ke outbound node.
+
 ## Load dan acceptance smoke
+### Smoke egress ephemeral
+
+Jalankan smoke tanpa menyentuh service production. Runner membaca fixture lokal yang tidak boleh di-commit, membuat config dan listener ephemeral, memeriksa DNS bootstrap, menguji CONNECT dengan credential benar, lalu memastikan CONNECT tanpa `Proxy-Authorization` menghasilkan `407`:
+
+```bash
+PYTHONPATH=. python3 tools/smoke_ephemeral.py --fixture-dir . --timeout 20
+```
+
+Fixture yang diperlukan: `vless-node.txt`, `vmess-node.txt`, `trojan-node.txt`, dan `shadowsocks-node.txt`. Output runner tidak mencetak share link, UUID, password, atau credential.
 
 Harness lokal tersedia tanpa node subscription nyata:
 
