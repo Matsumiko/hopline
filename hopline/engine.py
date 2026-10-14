@@ -29,6 +29,9 @@ class SingBoxEngine:
         self.base_port = base_port
         self.root = Path(workdir) if workdir else Path(tempfile.mkdtemp(prefix="hopline-engine-"))
         self.root.mkdir(parents=True, exist_ok=True)
+        for stale in self.root.glob("generation-*"):
+            if stale.is_dir():
+                shutil.rmtree(stale, ignore_errors=True)
         self.manager = GenerationManager()
         self._next_generation = 0
         self._active_node_signature: tuple[tuple[object, ...], ...] | None = None
@@ -86,7 +89,7 @@ class SingBoxEngine:
             str(config_path),
             "--disable-color",
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         generation = Generation(label=label, port=port)
         self._running[label] = RunningGeneration(generation, directory, process)
@@ -94,8 +97,13 @@ class SingBoxEngine:
             await self._wait_port(port, process)
         except BaseException:
             await self._terminate(process)
+            stderr_output = await process.stderr.read() if process.stderr is not None else b""
             self._running.pop(label, None)
-            raise
+            detail = stderr_output.decode(errors="replace").strip()
+            raise RuntimeError(
+                f"sing-box exited before listener opened: {process.returncode}"
+                + (f": {detail}" if detail else "")
+            )
         self.manager.publish(generation)
         return generation
 
@@ -106,7 +114,7 @@ class SingBoxEngine:
         await self.manager.wait_drained(generation)
         await self._terminate(running.process)
         self._running.pop(generation.label, None)
-
+        shutil.rmtree(running.directory, ignore_errors=True)
     async def close(self) -> None:
         for running in tuple(self._running.values()):
             running.generation.accepting = False

@@ -57,6 +57,12 @@ Daemon memakai file TOML private (`0600`):
 database = "/var/lib/hopline/hopline.db"
 interval = 2700
 jitter = 30
+gateway_host = "127.0.0.1"
+gateway_port = 18770
+tunnel_port = 18771
+sing_box_binary = "/usr/local/bin/sing-box"
+engine_workdir = "/var/lib/hopline/engine"
+max_active_connections = 64
 
 [[subscriptions]]
 url = "https://example.invalid/subscription"
@@ -132,7 +138,8 @@ systemctl daemon-reload
 systemctl enable --now hopline.service
 ```
 
-Set `PYTHONPATH=/opt/hopline/app` in the service environment or install the package into the service Python environment. The service reads private config from `/etc/hopline`, writes SQLite state only to `/var/lib/hopline`, and keeps control API bound to localhost. Never put subscription URLs or node credentials in unit files, shell history, logs, or repository files.
+Install `sing-box` pada path system-wide yang dapat dibaca user `hopline`, misalnya `/usr/local/bin/sing-box`, lalu pastikan `sing_box_binary` menunjuk ke path tersebut. Binary di `/home/ubuntu/.local/bin` tidak dapat dipakai service karena `ProtectHome=true`.
+Set `PYTHONPATH=/opt/hopline/app` in the service environment or install the package into the service Python environment. The service reads private config from `/etc/hopline`, writes SQLite state only to `/var/lib/hopline`, and keeps control API, gateway, and sing-box listeners bound to localhost. Never put subscription URLs or node credentials in unit files, shell history, logs, or repository files.
 
 Operational checks:
 
@@ -141,7 +148,8 @@ systemctl status hopline.service
 journalctl -u hopline.service --since=-10m --no-pager
 PYTHONPATH=/opt/hopline/app python3 -m hopline doctor --db /var/lib/hopline/hopline.db --json
 PYTHONPATH=/opt/hopline/app python3 -m hopline status --json
-```
+curl http://127.0.0.1:18773/metrics
+curl --proxy http://127.0.0.1:18770 --proxytunnel https://target.example
 
 Rollback: stop the service, restore the previous `/opt/hopline/app` tree and `/etc/hopline/hopline.toml`, then run `systemctl restart hopline.service`. Existing SQLite state is retained.
 

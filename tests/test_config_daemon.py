@@ -1,7 +1,9 @@
 import asyncio
 import contextlib
 import io
+import json
 import os
+import shutil
 import stat
 import tempfile
 import unittest
@@ -52,6 +54,43 @@ class ConfigDaemonTests(unittest.TestCase):
                     self.assertEqual(asyncio.run(_run_daemon(str(config_path), True)), 2)
             self.assertEqual(len(SQLiteRegistry(str(database)).list_nodes()), 0)
 
+
+    @unittest.skipUnless(shutil.which("sing-box"), "sing-box is required")
+    def test_run_once_starts_engine_and_gateway(self) -> None:
+        async def scenario() -> None:
+            async def subscription(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                body = b"vless://00000000-0000-4000-8000-000000000031@127.0.0.1:443?security=tls&type=tcp#staging"
+                writer.write(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body
+                )
+                await writer.drain()
+                writer.close()
+                await writer.wait_closed()
+
+            server = await asyncio.start_server(subscription, "127.0.0.1", 0)
+            port = server.sockets[0].getsockname()[1]
+            with tempfile.TemporaryDirectory() as directory:
+                config_path = Path(directory) / "hopline.toml"
+                database = Path(directory) / "registry.db"
+                workdir = Path(directory) / "engine"
+                config_path.write_text(
+                    f'[hopline]\ndatabase = "{database}"\ninterval = 60\n'
+                    f'gateway_port = 18779\ntunnel_port = 18979\nengine_workdir = "{workdir}"\n\n'
+                    f'[[subscriptions]]\nurl = "http://127.0.0.1:{port}/subscription"\n',
+                    encoding="utf-8",
+                )
+                config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(await _run_daemon(str(config_path), True), 0)
+                payload = json.loads(output.getvalue())
+                self.assertEqual(payload["nodes"], 1)
+                self.assertEqual(payload["gateway_port"], 18779)
+                self.assertGreater(payload["tunnel_port"], 0)
+            server.close()
+            await server.wait_closed()
+
+        asyncio.run(scenario())
 
 if __name__ == "__main__":
     unittest.main()

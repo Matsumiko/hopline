@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import random
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from .engine import SingBoxEngine
+from .generation import Generation
 from .syncer import SyncResult, Syncer
 
 
@@ -15,6 +16,7 @@ class SubscriptionScheduler:
         sources: Sequence[str],
         *,
         engine: SingBoxEngine | None = None,
+        on_generation: Callable[[Generation], None] | None = None,
         interval: float = 45 * 60,
         jitter: float = 0,
     ) -> None:
@@ -25,6 +27,7 @@ class SubscriptionScheduler:
         self.syncer = syncer
         self.sources = tuple(sources)
         self.engine = engine
+        self.on_generation = on_generation
         self.interval = interval
         self.jitter = jitter
         self._stop = asyncio.Event()
@@ -37,18 +40,21 @@ class SubscriptionScheduler:
             if self.engine is None:
                 results.append(await self.syncer.sync_url(source))
             else:
-                result, _generation = await self.syncer.sync_url_and_apply(source, self.engine)
+                result, generation = await self.syncer.sync_url_and_apply(source, self.engine)
+                if self.on_generation is not None:
+                    self.on_generation(generation)
                 results.append(result)
         return results
 
-    async def run(self) -> None:
-        while not self._stop.is_set():
+    async def run(self, *, initial_sync: bool = True) -> None:
+        if initial_sync:
             await self.sync_once()
+        while not self._stop.is_set():
             delay = self.interval + random.uniform(-self.jitter, self.jitter)
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=max(0, delay))
             except asyncio.TimeoutError:
-                continue
+                await self.sync_once()
 
     def stop(self) -> None:
         self._stop.set()

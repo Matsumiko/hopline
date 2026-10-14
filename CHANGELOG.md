@@ -173,5 +173,12 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 ### Verified
 
 - Staging host install completed with systemd user/group, private config, writable SQLite state, control API, and localhost metrics endpoint.
-- Proxy smoke remains blocked until `sing-box` is installed on the staging host; `doctor` reports `sing_box=false` and no local proxy listener is available.
+- Proxy egress smoke initially blocked because sing-box was absent from the systemd-visible path; resolved by installing `/usr/local/bin/sing-box` and wiring the service sandbox for netlink access.
+- Earlier staging blocker is superseded by the verified system-wide sing-box installation; the remaining open item is real egress IP verification.
+
+### Verified
+
+- Daemon runtime now wires subscription sync, persistent sing-box generation, localhost gateway, health feedback, control API, and optional metrics.
+- Staging with system-wide sing-box passed `doctor`, service startup, listeners on ports 18770–18773, and a live CONNECT handshake.
+- Systemd allows `AF_NETLINK`, required by sing-box 1.14.3 under the service sandbox; the service remains localhost-only.
 - Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.

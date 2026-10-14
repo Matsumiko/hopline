@@ -11,6 +11,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .config import HoplineConfig
+from .engine import SingBoxEngine
+from .gateway import Gateway
+from .health import HealthChecker
 from .registry import SQLiteRegistry
 from .scheduler import SubscriptionScheduler
 from .syncer import Syncer
@@ -92,59 +95,116 @@ async def _control_request(host: str, port: int, path: str) -> dict[str, object]
 
 async def _run_daemon(config_path: str, once: bool) -> int:
     from .control import ControlServer
-    from .health import HealthChecker
     from .metrics import MetricsServer
     from .probe import ActiveProbeScheduler
 
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
-    scheduler = SubscriptionScheduler(Syncer(registry), config.subscriptions, interval=config.interval, jitter=config.jitter)
-    metrics = MetricsServer(registry, host=config.metrics_host, port=config.metrics_port, probe_enabled=bool(config.probe_targets)) if config.metrics_enabled else None
-    if metrics is not None:
-        await metrics.start()
+    health = HealthChecker(registry)
+    engine = SingBoxEngine(
+        binary=config.sing_box_binary,
+        base_port=config.tunnel_port,
+        workdir=config.engine_workdir,
+    )
+    gateway: Gateway | None = None
+    scheduler: SubscriptionScheduler | None = None
+    metrics = MetricsServer(
+        registry,
+        host=config.metrics_host,
+        port=config.metrics_port,
+        probe_enabled=bool(config.probe_targets),
+    ) if config.metrics_enabled else None
+    control = ControlServer(registry)
     probe_scheduler = None
     probe_task = None
-    if config.probe_targets:
-        probe = None
-        if config.probe_mode == "http":
-            from functools import partial
-            from .probe import http_connect_probe
-            probe = partial(http_connect_probe, proxy_host=config.probe_proxy_host, proxy_port=config.probe_proxy_port)
-        probe_scheduler = ActiveProbeScheduler(HealthChecker(registry), registry.list_nodes, config.probe_targets, interval=config.probe_interval, timeout=config.probe_timeout, **({"probe": probe} if probe is not None else {}))
-        probe_task = asyncio.create_task(probe_scheduler.run())
-    control = ControlServer(registry)
+
+    def publish_generation(generation: Generation) -> None:
+        if gateway is None:
+            return
+        gateway.publish_generation(
+            generation.port,
+            {node.id: node.credential for node in registry.list_nodes()},
+        )
+
+    scheduler = SubscriptionScheduler(
+        Syncer(registry),
+        config.subscriptions,
+        engine=engine,
+        on_generation=publish_generation,
+        interval=config.interval,
+        jitter=config.jitter,
+    )
+    if metrics is not None:
+        await metrics.start()
     await control.start()
     loop = asyncio.get_running_loop()
-
     def stop_all() -> None:
         scheduler.stop()
         if probe_scheduler is not None:
             probe_scheduler.stop()
-
     for signal_name in ("SIGINT", "SIGTERM"):
         signal_number = getattr(signal, signal_name, None)
         if signal_number is not None:
             loop.add_signal_handler(signal_number, stop_all)
     try:
+        results = await scheduler.sync_once()
+        nodes = registry.list_nodes()
+        if not results or not nodes or engine.manager.active is None:
+            return 2
+        gateway = Gateway(
+            host=config.gateway_host,
+            port=config.gateway_port,
+            generation_port=engine.manager.active.port,
+            generation_credentials={node.id: node.credential for node in nodes},
+            health_state=lambda node_id: (record.state if (record := registry.health_record(node_id)) else None),
+            record_success=lambda node_id: health.record_success(node_id),
+            record_failure=lambda node_id, error: health.record_failure(node_id, error),
+            max_active_connections=config.max_active_connections,
+        )
+        await gateway.start()
+        if config.probe_targets:
+            probe = None
+            if config.probe_mode == "http":
+                from functools import partial
+                from .probe import http_connect_probe
+                probe = partial(http_connect_probe, proxy_host=config.probe_proxy_host, proxy_port=config.probe_proxy_port)
+            probe_scheduler = ActiveProbeScheduler(
+                health,
+                registry.list_nodes,
+                config.probe_targets,
+                interval=config.probe_interval,
+                timeout=config.probe_timeout,
+                **({"probe": probe} if probe is not None else {}),
+            )
+            probe_task = asyncio.create_task(probe_scheduler.run())
         if once:
-            results = await scheduler.sync_once()
-            if probe_scheduler is not None:
-                await probe_scheduler.probe_once()
-            print(json.dumps({"sources": len(results), "nodes": len(registry.list_nodes()), "probes": len(probe_scheduler.targets) if probe_scheduler else 0, "control_port": control.port, "metrics_port": metrics.port if metrics else None, "once": True}, sort_keys=True))
-            return 0 if results and registry.list_nodes() else 2
-        await scheduler.run()
+            print(json.dumps({
+                "sources": len(results),
+                "nodes": len(nodes),
+                "control_port": control.port,
+                "gateway_port": gateway.port,
+                "metrics_port": metrics.port if metrics else None,
+                "tunnel_port": engine.manager.active.port,
+                "once": True,
+            }, sort_keys=True))
+            return 0
+        await scheduler.run(initial_sync=False)
         return 0
     finally:
+        scheduler.stop()
         if probe_scheduler is not None:
             probe_scheduler.stop()
         if probe_task is not None:
             probe_task.cancel()
             await asyncio.gather(probe_task, return_exceptions=True)
+        if gateway is not None:
+            await gateway.stop()
+            await gateway.wait_closed()
+        await engine.close()
         if metrics is not None:
             await metrics.stop()
         await control.stop()
         registry.close()
-
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)

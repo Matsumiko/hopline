@@ -14,6 +14,12 @@ class HoplineConfig:
     subscriptions: tuple[str, ...]
     interval: float = 45 * 60
     jitter: float = 0
+    gateway_host: str = "127.0.0.1"
+    gateway_port: int = 18770
+    tunnel_port: int = 18771
+    sing_box_binary: str = "sing-box"
+    engine_workdir: str = ""
+    max_active_connections: int = 64
     probe_targets: tuple[str, ...] = ()
     probe_interval: float = 5 * 60
     probe_timeout: float = 5
@@ -41,6 +47,12 @@ class HoplineConfig:
         database = str(section.get("database", "hopline.db"))
         interval = float(section.get("interval", 45 * 60))
         jitter = float(section.get("jitter", 0))
+        gateway_host = str(section.get("gateway_host", "127.0.0.1"))
+        gateway_port = int(section.get("gateway_port", 18770))
+        tunnel_port = int(section.get("tunnel_port", 18771))
+        sing_box_binary = str(section.get("sing_box_binary", "sing-box"))
+        engine_workdir = str(section.get("engine_workdir", ""))
+        max_active_connections = int(section.get("max_active_connections", 64))
         subscriptions = document.get("subscriptions", [])
         if not isinstance(subscriptions, list):
             raise ValueError("subscriptions must be an array of tables")
@@ -77,12 +89,18 @@ class HoplineConfig:
         if probe_mode not in {"tcp", "http"}:
             raise ValueError("health.mode must be tcp or http")
         probe_proxy_host = str(health.get("proxy_host", "127.0.0.1"))
-        probe_proxy_port = int(health.get("proxy_port", 18771))
+        probe_proxy_port = int(health.get("proxy_port", tunnel_port))
         metrics_enabled = bool(health.get("metrics_enabled", False))
         metrics_host = str(health.get("metrics_host", "127.0.0.1"))
         metrics_port = int(health.get("metrics_port", 18773))
         if interval <= 0 or jitter < 0 or jitter >= interval:
             raise ValueError("interval and jitter are invalid")
+        if gateway_host not in {"127.0.0.1", "::1", "localhost"} or not 0 <= gateway_port <= 65535:
+            raise ValueError("gateway endpoint is invalid")
+        if not 1 <= tunnel_port <= 65535 or gateway_port == tunnel_port:
+            raise ValueError("tunnel endpoint is invalid")
+        if not sing_box_binary or max_active_connections <= 0:
+            raise ValueError("sing-box runtime settings are invalid")
         if probe_interval <= 0 or probe_timeout <= 0 or probe_timeout > probe_interval:
             raise ValueError("health probe interval and timeout are invalid")
         if not probe_proxy_host or not 1 <= probe_proxy_port <= 65535:
@@ -94,6 +112,12 @@ class HoplineConfig:
             subscriptions=tuple(urls),
             interval=interval,
             jitter=jitter,
+            gateway_host=gateway_host,
+            gateway_port=gateway_port,
+            tunnel_port=tunnel_port,
+            sing_box_binary=sing_box_binary,
+            engine_workdir=engine_workdir,
+            max_active_connections=max_active_connections,
             probe_targets=tuple(targets),
             probe_interval=probe_interval,
             probe_timeout=probe_timeout,
@@ -104,7 +128,6 @@ class HoplineConfig:
             metrics_host=metrics_host,
             metrics_port=metrics_port,
         )
-
     @classmethod
     def from_environment(cls) -> "HoplineConfig":
         return cls.from_file(os.environ.get("HOPLINE_CONFIG", "hopline.toml"))
