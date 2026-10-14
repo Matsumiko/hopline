@@ -50,11 +50,7 @@ def _require_url(url: str | None) -> str:
 
 
 def _emit(payload: dict[str, object], as_json: bool) -> None:
-    if as_json:
-        print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
-    else:
-        for key, value in payload.items():
-            print(f"{key}: {value}")
+    print(json.dumps(payload, sort_keys=True, separators=(",", ":")) if as_json else "\n".join(f"{key}: {value}" for key, value in payload.items()))
 
 
 async def _sync(url: str, database: str) -> dict[str, object]:
@@ -97,14 +93,15 @@ async def _control_request(host: str, port: int, path: str) -> dict[str, object]
 async def _run_daemon(config_path: str, once: bool) -> int:
     from .control import ControlServer
     from .health import HealthChecker
+    from .metrics import MetricsServer
     from .probe import ActiveProbeScheduler
 
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
-    scheduler = SubscriptionScheduler(
-        Syncer(registry), config.subscriptions,
-        interval=config.interval, jitter=config.jitter,
-    )
+    scheduler = SubscriptionScheduler(Syncer(registry), config.subscriptions, interval=config.interval, jitter=config.jitter)
+    metrics = MetricsServer(registry, host=config.metrics_host, port=config.metrics_port, probe_enabled=bool(config.probe_targets)) if config.metrics_enabled else None
+    if metrics is not None:
+        await metrics.start()
     probe_scheduler = None
     probe_task = None
     if config.probe_targets:
@@ -113,11 +110,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             from functools import partial
             from .probe import http_connect_probe
             probe = partial(http_connect_probe, proxy_host=config.probe_proxy_host, proxy_port=config.probe_proxy_port)
-        probe_scheduler = ActiveProbeScheduler(
-            HealthChecker(registry), registry.list_nodes, config.probe_targets,
-            interval=config.probe_interval, timeout=config.probe_timeout,
-            **({"probe": probe} if probe is not None else {}),
-        )
+        probe_scheduler = ActiveProbeScheduler(HealthChecker(registry), registry.list_nodes, config.probe_targets, interval=config.probe_interval, timeout=config.probe_timeout, **({"probe": probe} if probe is not None else {}))
         probe_task = asyncio.create_task(probe_scheduler.run())
     control = ControlServer(registry)
     await control.start()
@@ -137,7 +130,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             results = await scheduler.sync_once()
             if probe_scheduler is not None:
                 await probe_scheduler.probe_once()
-            print(json.dumps({"sources": len(results), "nodes": len(registry.list_nodes()), "probes": len(probe_scheduler.targets) if probe_scheduler else 0, "control_port": control.port, "once": True}, sort_keys=True))
+            print(json.dumps({"sources": len(results), "nodes": len(registry.list_nodes()), "probes": len(probe_scheduler.targets) if probe_scheduler else 0, "control_port": control.port, "metrics_port": metrics.port if metrics else None, "once": True}, sort_keys=True))
             return 0 if results and registry.list_nodes() else 2
         await scheduler.run()
         return 0
@@ -147,6 +140,8 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         if probe_task is not None:
             probe_task.cancel()
             await asyncio.gather(probe_task, return_exceptions=True)
+        if metrics is not None:
+            await metrics.stop()
         await control.stop()
         registry.close()
 
@@ -161,11 +156,9 @@ def main(argv: list[str] | None = None) -> int:
             _emit(payload, args.as_json)
             return 0 if payload["sing_box"] else 2
         if args.command in {"status", "nodes"}:
-            payload = asyncio.run(_control_request(args.host, args.port, "/" + args.command))
-            _emit(payload, args.as_json)
+            _emit(asyncio.run(_control_request(args.host, args.port, "/" + args.command)), args.as_json)
             return 0
-        url = _require_url(args.url)
-        payload = asyncio.run(_sync(url, args.db))
+        payload = asyncio.run(_sync(_require_url(args.url), args.db))
         _emit(payload, args.as_json)
         return 0 if payload["nodes"] else 2
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:

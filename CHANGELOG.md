@@ -163,4 +163,10 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Host Linux installation and rollback runbook di README.
 - Systemd unit memakai `PYTHONPATH=/opt/hopline/app` dan read-only source/config paths.
 - Deployment smoke tests untuk hardening unit dan `systemd-analyze verify`.
+
+### Added
+
+- Optional localhost Prometheus endpoint `/metrics`, disabled by default.
+- Bounded metrics: node count, health-state count, and active-probe enabled state.
+- Metrics configuration for bind host and port with localhost validation.
 - Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.

@@ -20,14 +20,16 @@ class HoplineConfig:
     probe_mode: str = "tcp"
     probe_proxy_host: str = "127.0.0.1"
     probe_proxy_port: int = 18771
+    metrics_enabled: bool = False
+    metrics_host: str = "127.0.0.1"
+    metrics_port: int = 18773
 
     @classmethod
     def from_file(cls, path: str | Path) -> "HoplineConfig":
         config_path = Path(path)
         if not config_path.is_file():
             raise ValueError(f"config file does not exist: {config_path}")
-        mode = stat.S_IMODE(config_path.stat().st_mode)
-        if mode & 0o077:
+        if stat.S_IMODE(config_path.stat().st_mode) & 0o077:
             raise ValueError("config file must not be readable by group or other users")
         try:
             document = tomllib.loads(config_path.read_text(encoding="utf-8"))
@@ -53,6 +55,7 @@ class HoplineConfig:
             urls.append(url)
         if not urls:
             raise ValueError("at least one subscription URL is required")
+
         health = document.get("health", {})
         if not isinstance(health, dict):
             raise ValueError("[health] section must be a table")
@@ -75,10 +78,17 @@ class HoplineConfig:
             raise ValueError("health.mode must be tcp or http")
         probe_proxy_host = str(health.get("proxy_host", "127.0.0.1"))
         probe_proxy_port = int(health.get("proxy_port", 18771))
-        if not probe_proxy_host or not 1 <= probe_proxy_port <= 65535:
-            raise ValueError("health proxy endpoint is invalid")
+        metrics_enabled = bool(health.get("metrics_enabled", False))
+        metrics_host = str(health.get("metrics_host", "127.0.0.1"))
+        metrics_port = int(health.get("metrics_port", 18773))
         if interval <= 0 or jitter < 0 or jitter >= interval:
             raise ValueError("interval and jitter are invalid")
+        if probe_interval <= 0 or probe_timeout <= 0 or probe_timeout > probe_interval:
+            raise ValueError("health probe interval and timeout are invalid")
+        if not probe_proxy_host or not 1 <= probe_proxy_port <= 65535:
+            raise ValueError("health proxy endpoint is invalid")
+        if metrics_host not in {"127.0.0.1", "::1", "localhost"} or not 1 <= metrics_port <= 65535:
+            raise ValueError("health metrics endpoint is invalid")
         return cls(
             database=database,
             subscriptions=tuple(urls),
@@ -90,9 +100,11 @@ class HoplineConfig:
             probe_mode=probe_mode,
             probe_proxy_host=probe_proxy_host,
             probe_proxy_port=probe_proxy_port,
+            metrics_enabled=metrics_enabled,
+            metrics_host=metrics_host,
+            metrics_port=metrics_port,
         )
 
     @classmethod
     def from_environment(cls) -> "HoplineConfig":
-        path = os.environ.get("HOPLINE_CONFIG", "hopline.toml")
-        return cls.from_file(path)
+        return cls.from_file(os.environ.get("HOPLINE_CONFIG", "hopline.toml"))

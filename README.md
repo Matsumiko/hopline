@@ -146,6 +146,18 @@ PYTHONPATH=/opt/hopline/app python3 -m hopline status --json
 
 Rollback: stop the service, restore the previous `/opt/hopline/app` tree and `/etc/hopline/hopline.toml`, then run `systemctl restart hopline.service`. Existing SQLite state is retained.
 
+## Metrics opsional
+
+Metrics Prometheus disabled-by-default. Aktifkan pada `[health]`:
+
+```toml
+metrics_enabled = true
+metrics_host = "127.0.0.1"
+metrics_port = 18773
+```
+
+Endpoint `GET http://127.0.0.1:18773/metrics` hanya bind localhost dan menyediakan node count, health-state count, serta status active probe. Label dibatasi pada enum health state; server tidak mengekspos host, port, node ID, URL, atau credential.
+
 ## Batasan
 
 - Bukan VPN level jaringan.

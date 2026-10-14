@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, Linux installation runbook, hardened systemd unit, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, health registry, dan localhost control API tersedia.
-- **Last verified:** 43 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, deployment hardening smoke, control API smoke, pre-byte failover regression, active probe cancellation, HTTP probe response validation, load gate, dan HTTPS proxy acceptance lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, optional localhost Prometheus metrics, Linux installation runbook, hardened systemd unit, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, health registry, dan localhost control API tersedia.
+- **Last verified:** 45 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, deployment hardening smoke, control API smoke, metrics text endpoint/redaction, pre-byte failover regression, active probe cancellation, HTTP probe response validation, load gate, dan HTTPS proxy acceptance lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,12 +26,12 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan optional Prometheus metrics.
+- Menjalankan installation runbook pada service host staging sebelum production go/no-go.
 
 ## Berikutnya
 
-1. Pertimbangkan Prometheus metrics setelah acceptance baseline stabil.
-2. Jalankan installation runbook pada service host nyata sebelum production go/no-go.
+1. Jalankan installation runbook pada service host staging sebelum production go/no-go.
+2. Tetapkan production provider probe target dan retention metrics.
 
 ## Bukti
 
@@ -73,7 +73,7 @@ Load smoke: `concurrency=16`, `limit=4`, `admitted=4`, `rejected=12`.
 
 HTTPS proxy acceptance: CONNECT gateway → upstream proxy → local origin, payload `pong` kembali end-to-end.
 
-Gate F1: **in progress**. Runtime, health-aware failover, active probes TCP/HTTP-over-CONNECT, connection boundary, local HTTPS proxy path, and deployment unit review lulus; real service-host installation dan optional metrics belum selesai.
+Gate F1: **in progress**. Runtime, health-aware failover, active probes TCP/HTTP-over-CONNECT, connection boundary, local HTTPS proxy path, deployment unit review, dan optional metrics lulus; real service-host installation belum selesai.
 ## Validasi Dokumentasi Baseline
 
 - Seluruh file yang dirujuk PRD dan README tersedia.
@@ -83,8 +83,8 @@ Gate F1: **in progress**. Runtime, health-aware failover, active probes TCP/HTTP
 
 ## Blocker / Risiko Aktif
 
-| Real service-host installation belum dijalankan | open | Unit dan runbook tervalidasi statically, host permissions/user/runtime belum dibuktikan | Jalankan runbook pada service host staging |
-| Prometheus metrics belum tersedia | deferred | Operasi baseline masih memakai CLI/control API | Tambahkan setelah F1 acceptance baseline |
+| Real service-host installation belum dijalankan | open | Unit/runbook tervalidasi statically, host permissions/user/runtime belum dibuktikan | Jalankan runbook pada service host staging |
+| Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
 
 
 ## Keputusan Terbuka
