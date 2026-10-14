@@ -39,6 +39,19 @@ class ConfigDaemonTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 HoplineConfig.from_file(path)
 
+
+    def test_config_reads_static_nodes_without_subscription(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "hopline.toml"
+            link = "vless://00000000-0000-4000-8000-000000000032@example.test:443?security=tls&type=ws&path=/x&host=example.test"
+            config_path.write_text(
+                f'static_nodes = [{link!r}]\n\n[hopline]\ndatabase = "{directory}/registry.db"\n',
+                encoding="utf-8",
+            )
+            config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            config = HoplineConfig.from_file(config_path)
+            self.assertEqual(config.subscriptions, ())
+            self.assertEqual(config.static_nodes, (link,))
     def test_run_once_closes_registry_after_sync(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config_path = Path(directory) / "hopline.toml"

@@ -129,6 +129,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
     scheduler = SubscriptionScheduler(
         Syncer(registry),
         config.subscriptions,
+        static_nodes=config.static_nodes,
         engine=engine,
         on_generation=publish_generation,
         interval=config.interval,

@@ -44,7 +44,11 @@ class SingBoxEngine:
             (
                 node.id, node.protocol, node.server, node.port, node.uuid,
                 node.tls, node.sni, node.transport_type, node.path, node.host, node.method,
-                node.plugin, node.plugin_opts, node.security, node.global_padding, node.authenticated_length,
+                node.plugin, node.plugin_opts, node.security, node.global_padding,
+                node.authenticated_length, node.alter_id, node.packet_encoding, node.flow,
+                node.encryption, node.reality_pbk, node.reality_sid, node.reality_spx,
+                node.fingerprint, node.alpn, node.allow_insecure, node.service_name,
+                node.header_type,
             )
             for node in sorted(nodes, key=lambda item: item.id)
         )

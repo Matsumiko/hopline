@@ -15,17 +15,19 @@ class SubscriptionScheduler:
         syncer: Syncer,
         sources: Sequence[str],
         *,
+        static_nodes: Sequence[str] = (),
         engine: SingBoxEngine | None = None,
         on_generation: Callable[[Generation], None] | None = None,
         interval: float = 45 * 60,
         jitter: float = 0,
     ) -> None:
-        if not sources:
-            raise ValueError("at least one subscription source is required")
+        if not sources and not static_nodes:
+            raise ValueError("at least one subscription source or static node is required")
         if interval <= 0 or jitter < 0 or jitter >= interval:
             raise ValueError("scheduler interval and jitter are invalid")
         self.syncer = syncer
         self.sources = tuple(sources)
+        self.static_nodes = tuple(static_nodes)
         self.engine = engine
         self.on_generation = on_generation
         self.interval = interval
@@ -41,6 +43,16 @@ class SubscriptionScheduler:
                 results.append(await self.syncer.sync_url(source))
             else:
                 result, generation = await self.syncer.sync_url_and_apply(source, self.engine)
+                if self.on_generation is not None:
+                    self.on_generation(generation)
+                results.append(result)
+        for link in self.static_nodes:
+            if self._stop.is_set():
+                break
+            if self.engine is None:
+                results.append(self.syncer.sync_static(link))
+            else:
+                result, generation = await self.syncer.sync_static_and_apply(link, self.engine)
                 if self.on_generation is not None:
                     self.on_generation(generation)
                 results.append(result)

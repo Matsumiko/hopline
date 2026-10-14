@@ -80,6 +80,20 @@ class Syncer:
         )
         return SyncResult(source, changed, len(nodes), invalid, False)
 
+    def sync_static(self, link: str) -> SyncResult:
+        node = parse_share_link(link, source="static")
+        source = f"static:{node.id}"
+        changed = self.registry.replace_subscription(
+            source, hashlib.sha256(link.encode("utf-8")).hexdigest(), [node],
+            body=link.encode("utf-8"),
+        )
+        return SyncResult(source, changed, 1, 0, False)
+
+    async def sync_static_and_apply(self, link: str, engine: SingBoxEngine) -> tuple[SyncResult, Generation]:
+        result = self.sync_static(link)
+        nodes = self.registry.list_nodes()
+        return result, await engine.apply_nodes(nodes)
+
     async def sync_url(self, url: str) -> SyncResult:
         metadata = self.registry.subscription_metadata(url)
         try:
