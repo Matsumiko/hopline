@@ -157,4 +157,10 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 - 41 test lulus tanpa `ResourceWarning`.
 - HTTP probe berhasil dengan auth node, menolak CONNECT non-200, dan memvalidasi response target.
+
+### Added
+
+- Host Linux installation and rollback runbook di README.
+- Systemd unit memakai `PYTHONPATH=/opt/hopline/app` dan read-only source/config paths.
+- Deployment smoke tests untuk hardening unit dan `systemd-analyze verify`.
 - Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.

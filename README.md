@@ -116,6 +116,36 @@ PYTHONPATH=. python3 experiments/f1/https_proxy_acceptance.py
 
 Default load gate menjalankan 16 concurrent CONNECT dengan limit 4 per node: tepat 4 koneksi diterima dan sisanya mendapat `503 Service Unavailable`. Acceptance harness membuktikan CONNECT gateway → upstream proxy → origin lokal dan relay payload dua arah.
 
+## Installation host Linux
+
+Run as root on a dedicated VPS. Keep source, config, and runtime state separate:
+
+```bash
+groupadd --system hopline
+useradd --system --gid hopline --home-dir /var/lib/hopline --shell /usr/sbin/nologin hopline
+install -d -o root -g root -m 0755 /opt/hopline/app
+install -d -o hopline -g hopline -m 0700 /var/lib/hopline
+install -d -o root -g hopline -m 0750 /etc/hopline
+cp -a hopline experiments tools /opt/hopline/app/
+install -o root -g root -m 0644 packaging/hopline.service /etc/systemd/system/hopline.service
+install -o root -g hopline -m 0640 hopline.toml /etc/hopline/hopline.toml
+systemctl daemon-reload
+systemctl enable --now hopline.service
+```
+
+Set `PYTHONPATH=/opt/hopline/app` in the service environment or install the package into the service Python environment. The service reads private config from `/etc/hopline`, writes SQLite state only to `/var/lib/hopline`, and keeps control API bound to localhost. Never put subscription URLs or node credentials in unit files, shell history, logs, or repository files.
+
+Operational checks:
+
+```bash
+systemctl status hopline.service
+journalctl -u hopline.service --since=-10m --no-pager
+PYTHONPATH=/opt/hopline/app python3 -m hopline doctor --db /var/lib/hopline/hopline.db --json
+PYTHONPATH=/opt/hopline/app python3 -m hopline status --json
+```
+
+Rollback: stop the service, restore the previous `/opt/hopline/app` tree and `/etc/hopline/hopline.toml`, then run `systemctl restart hopline.service`. Existing SQLite state is retained.
+
 ## Batasan
 
 - Bukan VPN level jaringan.

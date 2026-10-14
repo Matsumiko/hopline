@@ -8,6 +8,7 @@ Type=simple
 User=hopline
 Group=hopline
 WorkingDirectory=/var/lib/hopline
+Environment=PYTHONPATH=/opt/hopline/app
 ExecStart=/usr/bin/python3 -m hopline run --config /etc/hopline/hopline.toml
 Restart=on-failure
 RestartSec=5s
@@ -17,7 +18,7 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 ReadWritePaths=/var/lib/hopline
-ReadOnlyPaths=/etc/hopline
+ReadOnlyPaths=/etc/hopline /opt/hopline/app
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]
