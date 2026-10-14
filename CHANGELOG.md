@@ -68,10 +68,18 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Generated config 100 node lulus `sing-box check`.
 - Sembilan belas test lulus tanpa `ResourceWarning`; credential tidak dicetak, disimpan di fixture publik, atau masuk commit.
 
+### Added
+
+- `SubscriptionScheduler` dengan interval, jitter, cancellation, dan optional generation apply.
+- CLI `python3 -m hopline sync`, `test`, dan `doctor` dengan output `--json`, exit code, dan error pada stderr.
+
+### Verified
+
+- Dua puluh tiga test lulus tanpa `ResourceWarning`.
+- CLI help, JSON doctor, missing URL error, live sync 100 node, dan live doctor sudah dijalankan.
+
 ### Not Implemented Yet
 
-- Runtime gateway.
-- Parser subscription.
-- Storage SQLite.
-- Adapter dan subprocess sing-box.
-- Health checker, scorer, picker, Control API, dan CLI.
+- Health checker, scorer, picker, dan Control API.
+- Parser Clash YAML dan sing-box JSON.
+- Scheduler production lifecycle dan systemd packaging.

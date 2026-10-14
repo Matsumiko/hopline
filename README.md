@@ -40,6 +40,16 @@ Hopline mengelola pemilihan, health, failover sebelum byte client diteruskan, si
 
 Package runtime tersedia di `hopline/`. Parser VLESS, Trojan, VMess, dan Shadowsocks, bounded subscription fetch, SQLite registry, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, node routing, drain, dan active-stream preservation sudah diuji offline. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
 
+## CLI
+
+```bash
+python3 -m hopline doctor --json
+python3 -m hopline test --url "$HOPLINE_SUBSCRIPTION_URL" --json
+python3 -m hopline sync --url "$HOPLINE_SUBSCRIPTION_URL" --db hopline.db --json
+```
+
+`sync` menyimpan node dan metadata subscription ke SQLite. `test` mengambil dan mem-parse subscription tanpa menjalankan sing-box. `doctor` memeriksa schema registry, jumlah node, dan binary sing-box. Output `--json` hanya berisi metadata; credential node dan isi subscription tidak ditampilkan.
+
 ## Batasan
 
 - Bukan VPN level jaringan.

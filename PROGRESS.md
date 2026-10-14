@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, multi-protocol parser, config generator, HTTP fetcher, bounded Syncer snapshot, dan SQLite registry tersedia; scheduler/CLI belum tersedia.
-- **Last verified:** test suite F1, live subscription parse, dan 100-node sing-box config check lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, multi-protocol parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry, scheduler, dan CLI tersedia; health/control plane belum tersedia.
+- **Last verified:** test suite F1, live subscription sync 100 node, config check, dan CLI contract lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,14 +26,14 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan scheduler sync, SQLite migration policy, dan CLI setelah kontrak fetch/runtime stabil.
+- Melanjutkan Fase 1 dengan parser Clash/sing-box, removed hysteresis, dan scheduler production lifecycle.
 
 ## Berikutnya
 
 1. Tambahkan parser fixture untuk Clash/sing-box JSON tanpa credential live.
 2. Tambahkan removed hysteresis setelah tiga sync berturut-turut.
-3. Tambahkan scheduler interval/jitter dan konfigurasi subscription.
-4. Tambahkan CLI `hopline test` dan `hopline doctor`.
+3. Tambahkan konfigurasi scheduler persisten dan systemd packaging.
+4. Tambahkan CLI `hopline nodes` dan `hopline status` setelah control API tersedia.
 5. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
 
 ## Bukti
@@ -61,20 +61,20 @@ F1 test suite:
 ```text
 python3 -m py_compile hopline/*.py tests/*.py
 python3 -W error::ResourceWarning -m unittest discover -s tests -v
-Ran 19 tests — OK
+Ran 23 tests — OK
 ```
 
-Sync integration mencakup base64/share-link snapshot, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, redacted headers, dan generation apply.
+Sync integration mencakup base64/share-link snapshot, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, redacted headers, scheduler sync, CLI contract, dan generation apply.
 
 Live subscription smoke dilakukan ephemeral dengan URL yang diberikan: `parsed=100`, `invalid=0`, protokol `ss/trojan/vless/vmess`, body tidak dicetak dan tidak disimpan ke repository.
 
 Generated config untuk 100 node subscription lulus `sing-box check`.
 
+CLI smoke lulus: help semua command, `doctor --json`, `sync --json` live, missing URL error pada stderr, dan live doctor dengan 100 node.
+
 Smoke config: `python3 -m tools.smoke_config` menghasilkan `config-generator=passed sing-box-check=passed secret=fixture-only`.
 
-Integration mencakup Gateway → sing-box → target HTTP lokal, upstream Basic Auth, rotate, generation publish, drain, dan active relay setelah listener stop.
-
-Gate F1: **in progress**. Runtime, HTTP fetch, dan snapshot vertical slice lulus; Clash/sing-box JSON, scheduler, SQLite migration policy, CLI, dan acceptance melalui `HTTPS_PROXY` belum selesai.
+Gate F1: **in progress**. Runtime, HTTP fetch, snapshot, scheduler dasar, dan CLI lulus; Clash/sing-box JSON, removed hysteresis, scheduler production lifecycle, health/control plane, dan acceptance melalui `HTTPS_PROXY` belum selesai.
 
 ## Validasi Dokumentasi Baseline
 
@@ -88,7 +88,7 @@ Gate F1: **in progress**. Runtime, HTTP fetch, dan snapshot vertical slice lulus
 | Item | Status | Dampak | Cara membuka |
 |---|---|---|---|
 | Reload SIGHUP sing-box 1.14.3 menutup stream aktif | mitigated | In-place reload melanggar invariant active stream | Gunakan generation subprocess/listener berbeda; jangan SIGHUP saat stream aktif |
-| HTTP fetch berkala/scheduler belum tersedia | open | F1 belum berjalan terus-menerus dari konfigurasi | Implementasikan interval, jitter, dan lifecycle scheduler |
+| Scheduler production lifecycle belum tersedia | open | F1 belum berjalan terus-menerus dari konfigurasi/service manager | Tambahkan konfigurasi persisten dan systemd packaging |
 | Batas koneksi aktif per node belum ditetapkan | deferred | Parameter operasi belum final | Load test F4 |
 | Target provider probe belum dipilih | deferred | Active probe F2 belum memiliki target final | Putuskan sebelum F2 |
 
