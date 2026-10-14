@@ -126,7 +126,7 @@ Untuk Shadowsocks dengan `v2ray-plugin`, Hopline meneruskan opsi plugin ke sing-
 
 ### Strategi DNS
 
-Hopline mendefinisikan dua resolver sing-box: `dns-direct` untuk hostname relay/node dan `dns-remote` untuk query target melalui selector `proxy-auto`. Rule domain relay/node selalu memilih `dns-direct`, sedangkan `dns-remote` memakai `8.8.8.8` dengan detour ke outbound yang dipilih selector. Outbound node sendiri memakai `dns-direct` untuk mencegah loop saat hostname relay harus ditemukan sebelum koneksi proxy tersedia.
+Hopline mendefinisikan resolver `dns-direct` untuk hostname relay/node dan satu `dns-remote-<node-id>` per node untuk query target. Setiap resolver remote memakai `8.8.8.8` dengan `detour` langsung ke outbound node yang sama. Rule DNS mencocokkan `auth_user`, sehingga query dari credential node A mengikuti outbound node A; tidak ada selector global untuk DNS target. `auth_user` dan password inbound tetap dipakai untuk routing CONNECT ke outbound node.
 
 ## Load dan acceptance smoke
 

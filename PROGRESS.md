@@ -85,6 +85,8 @@ Deployment VPS authorized: Debian 12, systemd, `/usr/local/bin/sing-box` 1.14.3,
 DNS audit: generation config now declares `dns-local` as the default resolver and explicitly assigns it to relay/node outbounds. NekoBox's `dns-remote=8.8.8.8` detoured through one `proxy` outbound was not copied globally: Hopline selects among multiple outbounds, so that design would be node-incorrect and potentially recursive. Target CONNECT hostnames are left to the selected protocol outbound rather than resolved by Hopline Python.
 - Implemented DNS split in generated config: relay/node domains use `dns-direct`; `dns-remote` uses `8.8.8.8` through `proxy-auto`; mixed inbound applies `sniff` and `hijack-dns`; node outbounds bootstrap through `dns-direct`.
 - Targeted parser/config tests passed (9 tests), `tools/smoke_config.py` passed, and ephemeral egress smoke returned HTTP 200 for VLESS, VMess, Trojan, and Shadowsocks. Production service was not changed or restarted.
+- Refined target DNS routing to one `dns-remote-<node-id>` per node, with DNS rules matched by `auth_user` and direct detour to that node outbound. Inbound usernames/passwords and CONNECT `auth_user` rules remain intact.
+- Per-node DNS regression tests, multi-node `sing-box check`, and ephemeral egress smoke passed for VLESS, VMess, Trojan, and Shadowsocks. Production service was not restarted.
 - Validasi dokumentasi selesai sebelum eksperimen F0.
 
 ## Blocker / Risiko Aktif

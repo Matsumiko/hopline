@@ -214,5 +214,5 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Remote smoke: four configured static nodes loaded; Shadowsocks returned egress IP `139.162.133.162`. VLESS, VMess, and Trojan remained unsuccessful on this VPS sample and were not marked healthy.
 
 - Generated sing-box configurations now declare `dns-local`, set it as the default domain resolver, and attach it explicitly to relay/node outbounds. A single global `8.8.8.8` resolver detoured through `proxy` was intentionally not added because it is unsafe for a multi-node pool and can create DNS loops.
-- Generated sing-box configurations now route relay/node hostnames through `dns-direct`, send other DNS queries to `dns-remote` at `8.8.8.8` through the `proxy-auto` selector, and apply `sniff` plus `hijack-dns` to mixed inbound traffic. Node outbounds use `dns-direct` to avoid bootstrap loops.
-- Regression and ephemeral egress smoke passed for VLESS, VMess, Trojan, and Shadowsocks with the generated configuration.
+- Generated sing-box configurations now create one `dns-remote-<node-id>` server per node and match DNS rules by `auth_user`, so target DNS follows the same outbound selected for the authenticated CONNECT. Hopline inbound users, passwords, and `auth_user` outbound rules remain unchanged.
+- Regression, multi-node `sing-box check`, and ephemeral egress smoke passed for VLESS, VMess, Trojan, and Shadowsocks with per-node DNS detours.
