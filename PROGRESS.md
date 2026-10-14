@@ -5,7 +5,7 @@
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
 - **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, optional localhost Prometheus metrics, Linux installation runbook, hardened systemd unit, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, health registry, localhost control API, serta daemon wiring engine/gateway tersedia; staging runtime lulus dengan sing-box system-wide.
-- **Last verified:** 45 test F1, live subscription sync 100 node, config check, CLI contract, daemon once dengan engine/gateway aktif, systemd verify, deployment hardening smoke, staging systemd start/control/metrics/state-path checks, sing-box doctor, listener check, dan CONNECT handshake lulus tanpa credential live.
+- **Last verified:** 46 test F1, live subscription sync 100 node, config check, CLI contract, daemon once dengan engine/gateway aktif, systemd verify, deployment hardening smoke, staging systemd start/control/metrics/state-path checks, sing-box doctor, listener check, dan CONNECT handshake lulus tanpa credential live.
 
 ## Selesai
 
