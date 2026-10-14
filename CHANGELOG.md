@@ -85,6 +85,17 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 ### Added
 
+- Private TOML config loader dengan validasi permission `0600`.
+- CLI `run` untuk one-shot sync atau scheduler daemon dengan SIGTERM/SIGINT shutdown.
+- Hardened `packaging/hopline.service` dengan user terpisah dan filesystem/network restrictions.
+
+### Verified
+
+- Dua puluh sembilan test lulus tanpa `ResourceWarning`.
+- `run --once` live sync menghasilkan 100 node; `systemd-analyze verify` menerima unit service.
+
+### Added
+
 - Structured subscription parser untuk Clash YAML dan sing-box JSON.
 - Removed hysteresis per subscription source: node baru dihapus setelah tiga snapshot berturut-turut tidak memuat node tersebut.
 

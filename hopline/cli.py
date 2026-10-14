@@ -5,11 +5,14 @@ import asyncio
 import json
 import os
 import shutil
+import signal
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from .config import HoplineConfig
 from .registry import SQLiteRegistry
+from .scheduler import SubscriptionScheduler
 from .syncer import Syncer
 
 DEFAULT_DB = "hopline.db"
@@ -18,19 +21,17 @@ DEFAULT_DB = "hopline.db"
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="hopline", description="Local Hopline egress proxy controls")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    for name, help_text in (
-        ("sync", "Fetch and persist subscription nodes"),
-        ("test", "Fetch and parse a subscription without starting sing-box"),
-    ):
+    for name, help_text in (("sync", "Fetch and persist subscription nodes"), ("test", "Fetch and parse a subscription without starting sing-box")):
         sub = subparsers.add_parser(name, help=help_text)
         sub.add_argument("--url", default=os.environ.get("HOPLINE_SUBSCRIPTION_URL"), help="subscription URL")
         sub.add_argument("--db", default=DEFAULT_DB, help="SQLite registry path")
         sub.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
-
     doctor = subparsers.add_parser("doctor", help="Check local Hopline prerequisites")
     doctor.add_argument("--db", default=DEFAULT_DB, help="SQLite registry path")
     doctor.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
+    run = subparsers.add_parser("run", help="Run the subscription scheduler")
+    run.add_argument("--config", default=os.environ.get("HOPLINE_CONFIG", "hopline.toml"), help="TOML config path")
+    run.add_argument("--once", action="store_true", help="sync once then exit")
     return parser
 
 
@@ -55,14 +56,7 @@ async def _sync(url: str, database: str) -> dict[str, object]:
     registry = SQLiteRegistry(database)
     try:
         result = await Syncer(registry).sync_url(url)
-        return {
-            "changed": result.changed,
-            "invalid_entries": result.invalid_entries,
-            "nodes": result.parsed_nodes,
-            "not_modified": result.not_modified,
-            "status": result.status,
-            "used_last_valid": result.used_last_valid,
-        }
+        return {"changed": result.changed, "invalid_entries": result.invalid_entries, "nodes": result.parsed_nodes, "not_modified": result.not_modified, "status": result.status, "used_last_valid": result.used_last_valid}
     finally:
         registry.close()
 
@@ -76,19 +70,34 @@ def _doctor(database: str) -> dict[str, object]:
         schema = registry.schema_version()
     finally:
         registry.close()
-    return {
-        "database": str(db_path),
-        "database_exists": db_path.exists(),
-        "nodes": nodes,
-        "schema_version": schema,
-        "sing_box": binary is not None,
-        "sing_box_path": binary or "",
-    }
+    return {"database": str(db_path), "database_exists": db_path.exists(), "nodes": nodes, "schema_version": schema, "sing_box": binary is not None, "sing_box_path": binary or ""}
+
+
+async def _run_daemon(config_path: str, once: bool) -> int:
+    config = HoplineConfig.from_file(config_path)
+    registry = SQLiteRegistry(config.database)
+    scheduler = SubscriptionScheduler(Syncer(registry), config.subscriptions, interval=config.interval, jitter=config.jitter)
+    loop = asyncio.get_running_loop()
+    for signal_name in ("SIGINT", "SIGTERM"):
+        signal_number = getattr(signal, signal_name, None)
+        if signal_number is not None:
+            loop.add_signal_handler(signal_number, scheduler.stop)
+    try:
+        if once:
+            results = await scheduler.sync_once()
+            print(json.dumps({"sources": len(results), "nodes": len(registry.list_nodes()), "once": True}, sort_keys=True))
+            return 0 if results and registry.list_nodes() else 2
+        await scheduler.run()
+        return 0
+    finally:
+        registry.close()
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "run":
+            return asyncio.run(_run_daemon(args.config, args.once))
         if args.command == "doctor":
             payload = _doctor(args.db)
             _emit(payload, args.as_json)

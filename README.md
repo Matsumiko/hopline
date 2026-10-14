@@ -50,6 +50,27 @@ python3 -m hopline sync --url "$HOPLINE_SUBSCRIPTION_URL" --db hopline.db --json
 
 `sync` menyimpan node dan metadata subscription ke SQLite. `test` mengambil dan mem-parse subscription tanpa menjalankan sing-box. `doctor` memeriksa schema registry, jumlah node, dan binary sing-box. Output `--json` hanya berisi metadata; credential node dan isi subscription tidak ditampilkan.
 
+Daemon memakai file TOML private (`0600`):
+
+```toml
+[hopline]
+database = "/var/lib/hopline/hopline.db"
+interval = 2700
+jitter = 30
+
+[[subscriptions]]
+url = "https://example.invalid/subscription"
+```
+
+Jalankan sekali atau sebagai daemon:
+
+```bash
+python3 -m hopline run --config hopline.toml --once
+python3 -m hopline run --config hopline.toml
+```
+
+Template systemd tersedia di `packaging/hopline.service`. Service memakai user terpisah, `NoNewPrivileges`, `PrivateTmp`, filesystem protection, dan hanya `/var/lib/hopline` writable.
+
 ## Batasan
 
 - Bukan VPN level jaringan.
