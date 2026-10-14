@@ -91,7 +91,11 @@ class Gateway:
             if method.upper() != "CONNECT":
                 await self._respond(client, b"HTTP/1.1 501 Not Implemented\r\n\r\n")
                 return
-            requested_node = self._node_from_auth(headers.get("proxy-authorization"))
+            auth_value = headers.get("proxy-authorization")
+            if auth_value is None:
+                await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+                return
+            requested_node = self._node_from_auth(auth_value)
             candidates = self._picker.candidates(requested_node)
             if not candidates:
                 await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")

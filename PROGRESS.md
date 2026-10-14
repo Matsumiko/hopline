@@ -87,6 +87,8 @@ DNS audit: generation config now declares `dns-local` as the default resolver an
 - Targeted parser/config tests passed (9 tests), `tools/smoke_config.py` passed, and ephemeral egress smoke returned HTTP 200 for VLESS, VMess, Trojan, and Shadowsocks. Production service was not changed or restarted.
 - Refined target DNS routing to one `dns-remote-<node-id>` per node, with DNS rules matched by `auth_user` and direct detour to that node outbound. Inbound usernames/passwords and CONNECT `auth_user` rules remain intact.
 - Per-node DNS regression tests, multi-node `sing-box check`, and ephemeral egress smoke passed for VLESS, VMess, Trojan, and Shadowsocks. Production service was not restarted.
+- `tools/smoke_ephemeral.py --fixture-dir . --timeout 20` passed: VLESS, VMess, Trojan, and Shadowsocks each returned authenticated HTTP 200 and missing-credential HTTP 407. DNS bootstrap checks passed and output reported `production_service_touched: false`.
+- The smoke runner starts only ephemeral sing-box and Hopline Gateway listeners; production service was not restarted or reconfigured.
 - Validasi dokumentasi selesai sebelum eksperimen F0.
 
 ## Blocker / Risiko Aktif
