@@ -218,3 +218,4 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Regression, multi-node `sing-box check`, and ephemeral egress smoke passed for VLESS, VMess, Trojan, and Shadowsocks with per-node DNS detours.
 - Added `tools/smoke_ephemeral.py` for credential-safe VLESS WS/TLS, VMess WS/TLS, Trojan WS/TLS, and Shadowsocks egress checks. The runner validates direct node DNS bootstrap, authenticated CONNECT success, and `407` for missing credentials without touching the production service.
 - Gateway now returns `407 Proxy Authentication Required` when CONNECT has no `Proxy-Authorization`; `rotate` remains explicit and is not inferred from a missing header.
+- Production deployment verified on the authorized Debian 12 VPS: generated four-node config passed `sing-box check`, service restart stayed active, and gateway smoke returned HTTP 200 for VLESS, VMess, Trojan, and Shadowsocks plus HTTP 407 without proxy credentials.

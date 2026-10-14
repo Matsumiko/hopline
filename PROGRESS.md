@@ -89,6 +89,8 @@ DNS audit: generation config now declares `dns-local` as the default resolver an
 - Per-node DNS regression tests, multi-node `sing-box check`, and ephemeral egress smoke passed for VLESS, VMess, Trojan, and Shadowsocks. Production service was not restarted.
 - `tools/smoke_ephemeral.py --fixture-dir . --timeout 20` passed: VLESS, VMess, Trojan, and Shadowsocks each returned authenticated HTTP 200 and missing-credential HTTP 407. DNS bootstrap checks passed and output reported `production_service_touched: false`.
 - The smoke runner starts only ephemeral sing-box and Hopline Gateway listeners; production service was not restarted or reconfigured.
+- Production deployment of commit `7b02aef` completed on the authorized Debian 12 VPS after artifact checksum verification, generated four-node `sing-box check`, and rollback backup creation. `hopline.service` restarted successfully and remained active with localhost listeners on ports 18770–18773.
+- Production gateway smoke passed: VLESS, VMess, Trojan, and Shadowsocks each returned HTTP 200 through `127.0.0.1:18770`; missing `Proxy-Authorization` returned HTTP 407. Control status reported 4 nodes healthy and metrics returned HTTP 200. Rollback tree remains available.
 - Validasi dokumentasi selesai sebelum eksperimen F0.
 
 ## Blocker / Risiko Aktif
