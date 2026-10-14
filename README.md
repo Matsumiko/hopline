@@ -52,9 +52,16 @@ python3 -m hopline sync --url "$HOPLINE_SUBSCRIPTION_URL" --db hopline.db --json
 
 `sync` menyimpan node dan metadata subscription ke SQLite. `test` mengambil dan mem-parse subscription tanpa menjalankan sing-box. `doctor` memeriksa schema registry, jumlah node, dan binary sing-box. Output `--json` hanya berisi metadata; credential node dan isi subscription tidak ditampilkan.
 
-Daemon memakai file TOML private (`0600`):
+Daemon memakai file TOML private (`0600`). Sumber node dapat berupa subscription HTTP(S) dan/atau `static_nodes` share link langsung. `static_nodes` menjalankan node satuan tanpa mencocokkannya ke subscription:
 
 ```toml
+static_nodes = [
+  "vless://...",
+  "vmess://...",
+  "ss://...",
+  "trojan://...",
+]
+
 [hopline]
 database = "/var/lib/hopline/hopline.db"
 interval = 2700
@@ -69,6 +76,8 @@ max_active_connections = 64
 [[subscriptions]]
 url = "https://example.invalid/subscription"
 ```
+
+`[[subscriptions]]` dapat dihilangkan jika hanya memakai `static_nodes`. Credential node harus tetap berada di file private.
 
 Jalankan sekali atau sebagai daemon:
 
@@ -114,6 +123,10 @@ proxy_port = 18771
 Mode `http` membuka CONNECT ke mixed inbound sing-box dengan auth user node, lalu meminta target melalui tunnel dan menerima status HTTP `2xx`–`3xx` sebagai sehat. Mode `tcp` tetap tersedia sebagai default. Service systemd hanya perlu akses jaringan keluar dan membaca config private; port control tetap localhost.
 
 Untuk Shadowsocks dengan `v2ray-plugin`, Hopline meneruskan opsi plugin ke sing-box. Ini diperlukan untuk node WS/TLS seperti export Nekobox; tanpa field tersebut, node terlihat sehat pada TCP tetapi gagal saat handshake protocol.
+
+### Strategi DNS
+
+Hopline mendefinisikan dua resolver sing-box: `dns-direct` untuk hostname relay/node dan `dns-remote` untuk query target melalui selector `proxy-auto`. Rule domain relay/node selalu memilih `dns-direct`, sedangkan `dns-remote` memakai `8.8.8.8` dengan detour ke outbound yang dipilih selector. Outbound node sendiri memakai `dns-direct` untuk mencegah loop saat hostname relay harus ditemukan sebelum koneksi proxy tersedia.
 
 ## Load dan acceptance smoke
 

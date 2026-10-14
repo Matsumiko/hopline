@@ -38,6 +38,18 @@ class SQLiteRegistry:
                 security TEXT,
                 global_padding INTEGER,
                 authenticated_length INTEGER,
+                alter_id INTEGER,
+                packet_encoding TEXT,
+                flow TEXT,
+                encryption TEXT,
+                reality_pbk TEXT,
+                reality_sid TEXT,
+                reality_spx TEXT,
+                fingerprint TEXT,
+                alpn TEXT,
+                allow_insecure INTEGER NOT NULL DEFAULT 0,
+                service_name TEXT,
+                header_type TEXT,
                 name TEXT
             );
             CREATE TABLE IF NOT EXISTS subscriptions (
@@ -83,6 +95,10 @@ class SQLiteRegistry:
             ("path", "TEXT"), ("host", "TEXT"), ("method", "TEXT"),
             ("plugin", "TEXT"), ("plugin_opts", "TEXT"), ("security", "TEXT"),
             ("global_padding", "INTEGER"), ("authenticated_length", "INTEGER"),
+            ("alter_id", "INTEGER"), ("packet_encoding", "TEXT"), ("flow", "TEXT"),
+            ("encryption", "TEXT"), ("reality_pbk", "TEXT"), ("reality_sid", "TEXT"),
+            ("reality_spx", "TEXT"), ("fingerprint", "TEXT"), ("alpn", "TEXT"),
+            ("allow_insecure", "INTEGER"), ("service_name", "TEXT"), ("header_type", "TEXT"),
         )
         for name, definition in node_columns:
             if name not in tables["nodes"]:
@@ -102,7 +118,9 @@ class SQLiteRegistry:
     def list_nodes(self) -> list[Node]:
         rows = self.connection.execute(
             "SELECT id, protocol, server, port, uuid, tls, sni, transport_type, path, host, method, "
-            "plugin, plugin_opts, security, global_padding, authenticated_length, name "
+            "plugin, plugin_opts, security, global_padding, authenticated_length, alter_id, "
+            "packet_encoding, flow, encryption, reality_pbk, reality_sid, reality_spx, fingerprint, "
+            "alpn, allow_insecure, service_name, header_type, name "
             "FROM nodes ORDER BY id"
         ).fetchall()
         return [self._node_from_row(row) for row in rows]
@@ -181,21 +199,30 @@ class SQLiteRegistry:
                 self.connection.execute(
                     """INSERT INTO nodes(
                         id, protocol, server, port, uuid, tls, sni, transport_type, path, host, method,
-                        plugin, plugin_opts, security, global_padding, authenticated_length, name
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        plugin, plugin_opts, security, global_padding, authenticated_length,
+                        alter_id, packet_encoding, flow, encryption, reality_pbk, reality_sid, reality_spx,
+                        fingerprint, alpn, allow_insecure, service_name, header_type, name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET protocol=excluded.protocol, server=excluded.server,
                     port=excluded.port, uuid=excluded.uuid, tls=excluded.tls, sni=excluded.sni,
                     transport_type=excluded.transport_type, path=excluded.path, host=excluded.host,
                     method=excluded.method, plugin=excluded.plugin, plugin_opts=excluded.plugin_opts,
                     security=excluded.security, global_padding=excluded.global_padding,
-                    authenticated_length=excluded.authenticated_length, name=excluded.name""",
+                    authenticated_length=excluded.authenticated_length, alter_id=excluded.alter_id,
+                    packet_encoding=excluded.packet_encoding, flow=excluded.flow, encryption=excluded.encryption,
+                    reality_pbk=excluded.reality_pbk, reality_sid=excluded.reality_sid,
+                    reality_spx=excluded.reality_spx, fingerprint=excluded.fingerprint, alpn=excluded.alpn,
+                    allow_insecure=excluded.allow_insecure, service_name=excluded.service_name,
+                    header_type=excluded.header_type, name=excluded.name""",
                     (
                         node.id, node.protocol, node.server, node.port, node.uuid, int(node.tls),
                         node.sni, node.transport_type, node.path, node.host, node.method,
                         node.plugin, node.plugin_opts, node.security,
                         None if node.global_padding is None else int(node.global_padding),
                         None if node.authenticated_length is None else int(node.authenticated_length),
-                        node.name,
+                        node.alter_id, node.packet_encoding, node.flow, node.encryption,
+                        node.reality_pbk, node.reality_sid, node.reality_spx, node.fingerprint,
+                        node.alpn, int(node.allow_insecure), node.service_name, node.header_type, node.name,
                     ),
                 )
                 self.connection.execute(
@@ -243,8 +270,11 @@ class SQLiteRegistry:
             uuid=row["uuid"], tls=bool(row["tls"]), sni=row["sni"],
             transport_type=row["transport_type"], path=row["path"], host=row["host"],
             method=row["method"], plugin=row["plugin"], plugin_opts=row["plugin_opts"],
-            security=row["security"],
+            security=row["security"], encryption=row["encryption"],
             global_padding=None if row["global_padding"] is None else bool(row["global_padding"]),
             authenticated_length=None if row["authenticated_length"] is None else bool(row["authenticated_length"]),
-            name=row["name"],
+            alter_id=row["alter_id"], packet_encoding=row["packet_encoding"], flow=row["flow"],
+            reality_pbk=row["reality_pbk"], reality_sid=row["reality_sid"], reality_spx=row["reality_spx"],
+            fingerprint=row["fingerprint"], alpn=row["alpn"], allow_insecure=bool(row["allow_insecure"]),
+            service_name=row["service_name"], header_type=row["header_type"], name=row["name"],
         )
