@@ -266,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command in {"status", "nodes"}:
             _emit(asyncio.run(_control_request(args.host, args.port, "/" + args.command)), args.as_json)
             return 0
+        if args.command == "run":
+            return asyncio.run(_run_daemon(args.config, args.once))
         payload = asyncio.run(_sync(_require_url(args.url), args.db))
         _emit(payload, args.as_json)
         return 0 if payload["nodes"] else 2

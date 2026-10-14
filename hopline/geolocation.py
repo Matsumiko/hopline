@@ -120,6 +120,11 @@ def default_providers() -> tuple[GeoProvider, ...]:
             _parse_cekipsaya,
             (("Referer", "https://cekipsaya.com/cek-ip-saya/"),),
         ),
+        GeoProvider(
+            "ipwho",
+            lambda ip: "https://ipwho.is/" + urllib.parse.quote(ip, safe=""),
+            _parse_ipwho,
+        ),
     )
 
 
@@ -167,6 +172,22 @@ def _parse_cekipsaya(payload: dict) -> tuple[str, str, str | None, str | None, s
     country = payload.get("country")
     match = re.search(r"\(([A-Za-z]{2})\)", country or "")
     return payload["ip"], _require_code(match.group(1) if match else None), country, payload.get("asn"), payload.get("org")
+
+
+def _parse_ipwho(payload: dict) -> tuple[str, str, str | None, str | None, str | None]:
+    if payload.get("success") is not True:
+        raise GeoLookupError("ipwho response is unsuccessful")
+    connection = payload.get("connection")
+    if not isinstance(connection, dict):
+        connection = {}
+    _require_ip(payload.get("ip"))
+    return (
+        payload["ip"],
+        _require_code(payload.get("country_code")),
+        payload.get("country"),
+        connection.get("asn"),
+        connection.get("org"),
+    )
 
 
 def _require_ip(value: object) -> None:
