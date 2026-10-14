@@ -196,6 +196,11 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             generation_credentials={node.id: node.credential for node in nodes},
             health_state=lambda node_id: (record.state if (record := registry.health_record(node_id)) else None),
             health_available=health.is_available,
+            country_metadata=lambda node_id: (
+                (row["country_code"], row["checked_at"])
+                if (row := registry.geolocation_record(node_id)) else None
+            ),
+            country_max_age=config.country_max_age,
             record_success=lambda node_id: health.record_success(node_id),
             record_failure=lambda node_id, error: health.record_failure(node_id, error),
             max_active_connections=config.max_active_connections,

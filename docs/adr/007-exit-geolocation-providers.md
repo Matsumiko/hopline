@@ -25,8 +25,10 @@ Hasil disimpan di tabel `geolocation`, terpisah dari health, dengan IP, country,
 - Provider dapat diganti tanpa mengubah domain model.
 - Fallback meningkatkan peluang diagnostic berhasil tetapi tetap memerlukan rate-limit/freshness policy sebelum dipakai sebagai filter country.
 - Lookup harus dijalankan melalui tunnel node yang diuji; lookup IP dari VPS hanya diagnostic terhadap VPS.
+- Gateway memakai `country_max_age` default 3600 detik. Metadata missing/stale tidak eligible untuk `country-<cc>`; health/cooldown filter tetap diterapkan.
+- `country-<cc>-sticky-<sessionId>` hanya rebind ke node dengan country code yang sama.
 - Hasil country tidak mengubah state health.
-- `country-*` routing belum dianggap selesai sampai lookup melalui outbound node, cache freshness, dan empty-pool behavior memiliki acceptance test.
+- `country-*` routing dianggap selesai untuk slice ini setelah country picker, freshness, dan empty-pool behavior memiliki acceptance test.
 
 ## Alternatives rejected
 

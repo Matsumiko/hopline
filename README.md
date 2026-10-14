@@ -70,6 +70,7 @@ gateway_host = "127.0.0.1"
 gateway_port = 18770
 tunnel_port = 18771
 control_port = 18772
+country_max_age = 3600
 sing_box_binary = "/usr/local/bin/sing-box"
 engine_workdir = "/var/lib/hopline/engine"
 max_active_connections = 64
@@ -84,6 +85,14 @@ url = "https://example.invalid/subscription"
 
 `[auth]` wajib berisi username dan password lokal. Simpan file TOML dengan permission `0600`. Credential node/provider tetap berada internal Hopline dan tidak pernah menjadi credential client. `control_port` default `18772` untuk service production dan dapat diatur ke `0` pada test agar OS memilih port ephemeral. CLI `status` dan `nodes` tetap memakai `18772` secara default; gunakan `--port` jika daemon memakai port lain.
 Untuk affinity per sesi, gunakan username proxy `sticky-<sessionId>`, misalnya `sticky-job-42`. Binding hanya hidup di proses Gateway dan hilang saat restart; TTL diperpanjang ketika koneksi berhasil dipakai. `node-<id>` tetap forced tanpa fallback, sedangkan `rotate` tetap memilih ulang per koneksi.
+Routing country memakai username:
+
+```text
+country-id
+country-sg-sticky-job42
+```
+
+Hanya metadata country yang cocok dan lebih baru dari `country_max_age` yang dipakai. Node `dead`, `quarantine`, cooldown, metadata missing, dan metadata stale dilewati. Jika pool country kosong, Gateway mengembalikan `503`. Sticky country hanya melakukan rebind di negara yang sama.
 Untuk memverifikasi lokasi IP exit satu node, daemon harus sedang berjalan dan node sudah tersimpan di registry:
 
 ```bash

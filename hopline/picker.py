@@ -24,9 +24,9 @@ class NodePicker:
         self._node_ids = tuple(node_ids)
         self._next = 0
 
-    def candidates(self, requested: str | None) -> list[str]:
+    def candidates(self, requested: str | None, *, eligible: Callable[[str], bool] | None = None) -> list[str]:
         if requested and requested != "rotate":
-            return [requested] if requested in self._node_ids and self._eligible(requested) else []
+            return [requested] if requested in self._node_ids and self._eligible(requested, eligible) else []
         if not self._node_ids:
             return []
         ordered = [
@@ -34,10 +34,10 @@ class NodePicker:
             for offset in range(len(self._node_ids))
         ]
         self._next = (self._next + 1) % len(self._node_ids)
-        return [node_id for node_id in ordered if self._eligible(node_id)]
+        return [node_id for node_id in ordered if self._eligible(node_id, eligible)]
 
-    def _eligible(self, node_id: str) -> bool:
+    def _eligible(self, node_id: str, eligible: Callable[[str], bool] | None = None) -> bool:
         state = self._state(node_id)
-        return self._available(node_id) and state not in {
+        return self._available(node_id) and (eligible is None or eligible(node_id)) and state not in {
             HealthState.DEAD, HealthState.QUARANTINE, "dead", "quarantine"
         }
