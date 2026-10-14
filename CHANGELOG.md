@@ -136,4 +136,15 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 - 37 test lulus tanpa `ResourceWarning`.
 - Probe success, failure, timeout seam, dan graceful cancellation teruji.
+
+### Added
+
+- Active connection accounting per node dengan `503 Service Unavailable` saat admission limit tercapai.
+- Harness `experiments/f1/gateway_load.py` untuk concurrent CONNECT.
+- Harness `experiments/f1/https_proxy_acceptance.py` untuk relay gateway → upstream → origin lokal.
+
+### Verified
+
+- 16 concurrent CONNECT dengan limit 4 menghasilkan 4 accepted dan 12 rejected.
+- HTTPS proxy acceptance merelay payload `pong` end-to-end.
 - Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.

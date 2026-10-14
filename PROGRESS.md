@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; provider-specific probe semantics dan HTTPS_PROXY acceptance belum selesai.
-- **Last verified:** 37 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, control API smoke, pre-byte failover regression, dan active probe cancellation lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, per-node active connection limit, load/acceptance harness, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; provider-specific probe semantics belum selesai.
+- **Last verified:** 39 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, control API smoke, pre-byte failover regression, active probe cancellation, load gate, dan HTTPS proxy acceptance lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,14 +26,13 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan load test dan end-to-end acceptance.
+- Melanjutkan Fase 1 dengan provider-specific probe semantics dan host installation review.
 
 ## Berikutnya
 
-1. Tambahkan load test untuk batas koneksi aktif per node.
-2. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
-3. Putuskan target provider probe dan semantics HTTP melalui node.
-4. Siapkan systemd install/runbook setelah review service host.
+1. Putuskan target provider probe dan semantics HTTP melalui node.
+2. Review systemd install/runbook pada service host.
+3. Pertimbangkan Prometheus metrics setelah acceptance baseline stabil.
 
 ## Bukti
 
@@ -58,7 +57,7 @@ Observed: `generation_swap=passed active_stream_preserved=passed new_connections
 F1 test suite:
 ```text
 python3 -W error::ResourceWarning -m unittest discover -s tests -v
-Ran 37 tests — OK
+Ran 39 tests — OK
 ```
 
 Health/control integration mencakup passive success/failure transitions, active probe seam, SQLite health persistence, localhost-only `/status` dan `/nodes`, CLI `status`/`nodes`, dan response redaction.
@@ -67,15 +66,15 @@ Picker/failover integration mencakup skip `dead`/`quarantine`, feedback passive 
 
 Active probe integration mencakup `[health]` target/interval/timeout configuration, target validation tanpa credential, per-node timeout/error persistence, scheduler cancellation, dan daemon lifecycle wiring.
 
+Connection/load integration mencakup per-node active admission, release setelah relay berakhir, `503` saat limit penuh, 16-concurrent/4-limit harness, serta local origin relay acceptance melalui upstream proxy.
+
 Sync integration mencakup base64/share-link, Clash YAML, sing-box JSON, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, removed hysteresis tiga sync, scheduler sync, CLI contract, persistent TOML permission validation, daemon once, dan generation apply.
 
-Live subscription smoke: `parsed=100`, `invalid=0`, protokol `ss/trojan/vless/vmess`; body tidak dicetak dan tidak disimpan ke repository.
+Load smoke: `concurrency=16`, `limit=4`, `admitted=4`, `rejected=12`.
 
-Control smoke: `/status` menghasilkan JSON `nodes=1`, `schema_version=1`, tanpa credential.
+HTTPS proxy acceptance: CONNECT gateway → upstream proxy → local origin, payload `pong` kembali end-to-end.
 
-Failover smoke: node pertama menerima `502`, node kedua menerima CONNECT, client menerima satu `200` setelah kandidat kedua siap.
-
-Gate F1: **in progress**. Health-aware picker/failover, registry, control API, dan active probe scheduler lulus; load boundary, provider-specific probe semantics, acceptance melalui `HTTPS_PROXY`, dan host installation runbook belum selesai.
+Gate F1: **in progress**. Runtime, health-aware failover, active probes, connection boundary, dan local HTTPS proxy path lulus; provider-specific probe semantics dan host installation review belum selesai.
 
 ## Validasi Dokumentasi Baseline
 

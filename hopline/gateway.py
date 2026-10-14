@@ -20,7 +20,10 @@ class Gateway:
         health_state: Callable[[str], HealthState | str | None] | None = None,
         record_success: Callable[[str], None] | None = None,
         record_failure: Callable[[str, str], None] | None = None,
+        max_active_connections: int = 64,
     ) -> None:
+        if max_active_connections <= 0:
+            raise ValueError("max_active_connections must be positive")
         self.host = host
         self._requested_port = port
         self._generation_port = generation_port
@@ -28,6 +31,8 @@ class Gateway:
         self._picker = NodePicker(generation_credentials, state=health_state)
         self._record_success = record_success
         self._record_failure = record_failure
+        self._max_active_connections = max_active_connections
+        self._active_connections: dict[str, int] = {node_id: 0 for node_id in generation_credentials}
         self._accepting = False
         self._server: asyncio.AbstractServer | None = None
         self._tasks: set[asyncio.Task[None]] = set()
@@ -44,15 +49,17 @@ class Gateway:
         self._accepting = True
         self._server = await asyncio.start_server(self._accept, self.host, self._requested_port)
 
-    def publish_generation(
-        self, generation_port: int, generation_credentials: dict[str, str]
-    ) -> None:
+    def publish_generation(self, generation_port: int, generation_credentials: dict[str, str]) -> None:
         """Publish one generation for new connections; existing relays are untouched."""
         if not generation_credentials:
             raise ValueError("generation must contain at least one node")
         self._generation_port = generation_port
         self._generation_credentials = dict(generation_credentials)
         self._picker.replace(generation_credentials)
+        self._active_connections = {
+            node_id: self._active_connections.get(node_id, 0)
+            for node_id in generation_credentials
+        }
 
     async def stop(self) -> None:
         """Stop accepting new clients; preserve existing relay streams."""
@@ -90,8 +97,12 @@ class Gateway:
                 await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
                 return
 
+            attempted_any = False
             last_response: bytes | None = None
             for node_id in candidates:
+                if not self._reserve(node_id):
+                    continue
+                attempted_any = True
                 try:
                     upstream_reader, upstream = await asyncio.wait_for(
                         asyncio.open_connection("127.0.0.1", self._generation_port), 3
@@ -115,6 +126,7 @@ class Gateway:
                 except (asyncio.TimeoutError, asyncio.IncompleteReadError, ConnectionError, OSError) as error:
                     self._report_failure(node_id, type(error).__name__)
                 finally:
+                    self._release(node_id)
                     if upstream is not None and not upstream.is_closing():
                         upstream.close()
                         try:
@@ -123,7 +135,10 @@ class Gateway:
                             pass
                     upstream = None
 
-            await self._respond(client, last_response or b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
+            if not attempted_any:
+                await self._respond(client, b"HTTP/1.1 503 Service Unavailable\r\n\r\n")
+            else:
+                await self._respond(client, last_response or b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, ConnectionError, OSError, ValueError):
             if not client.is_closing():
                 try:
@@ -143,6 +158,19 @@ class Gateway:
                     await client.wait_closed()
                 except ConnectionError:
                     pass
+
+    def _reserve(self, node_id: str) -> bool:
+        active = self._active_connections.get(node_id, 0)
+        if active >= self._max_active_connections:
+            return False
+        self._active_connections[node_id] = active + 1
+        return True
+
+    def _release(self, node_id: str) -> None:
+        active = self._active_connections.get(node_id, 0)
+        if active <= 0:
+            raise RuntimeError(f"active connection underflow for {node_id}")
+        self._active_connections[node_id] = active - 1
 
     def _report_failure(self, node_id: str, error: str) -> None:
         if self._record_failure is not None:
@@ -168,10 +196,7 @@ class Gateway:
                 except (AttributeError, OSError, RuntimeError):
                     pass
 
-        await asyncio.gather(
-            pipe(client_reader, upstream_writer),
-            pipe(upstream_reader, client_writer),
-        )
+        await asyncio.gather(pipe(client_reader, upstream_writer), pipe(upstream_reader, client_writer))
 
     @staticmethod
     async def _read_headers(reader: asyncio.StreamReader) -> tuple[str, str, dict[str, str]]:

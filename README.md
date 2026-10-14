@@ -102,6 +102,17 @@ timeout = 5
 
 Daemon menjalankan probe berkala terhadap endpoint node dan menyimpan hasilnya di health registry. `targets` adalah target kebijakan yang tervalidasi dan tidak boleh berisi username, password, atau fragment. Probe tidak mencetak URL atau credential ke output.
 
+## Load dan acceptance smoke
+
+Harness lokal tersedia tanpa node subscription nyata:
+
+```bash
+PYTHONPATH=. python3 experiments/f1/gateway_load.py
+PYTHONPATH=. python3 experiments/f1/https_proxy_acceptance.py
+```
+
+Default load gate menjalankan 16 concurrent CONNECT dengan limit 4 per node: tepat 4 koneksi diterima dan sisanya mendapat `503 Service Unavailable`. Acceptance harness membuktikan CONNECT gateway → upstream proxy → origin lokal dan relay payload dua arah.
+
 ## Batasan
 
 - Bukan VPN level jaringan.
