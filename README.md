@@ -129,6 +129,15 @@ Untuk Shadowsocks dengan `v2ray-plugin`, Hopline meneruskan opsi plugin ke sing-
 Hopline mendefinisikan resolver `dns-direct` untuk hostname relay/node dan satu `dns-remote-<node-id>` per node untuk query target. Setiap resolver remote memakai `8.8.8.8` dengan `detour` langsung ke outbound node yang sama. Rule DNS mencocokkan `auth_user`, sehingga query dari credential node A mengikuti outbound node A; tidak ada selector global untuk DNS target. `auth_user` dan password inbound tetap dipakai untuk routing CONNECT ke outbound node.
 
 ## Load dan acceptance smoke
+### Smoke egress ephemeral
+
+Jalankan smoke tanpa menyentuh service production. Runner membaca fixture lokal yang tidak boleh di-commit, membuat config dan listener ephemeral, memeriksa DNS bootstrap, menguji CONNECT dengan credential benar, lalu memastikan CONNECT tanpa `Proxy-Authorization` menghasilkan `407`:
+
+```bash
+PYTHONPATH=. python3 tools/smoke_ephemeral.py --fixture-dir . --timeout 20
+```
+
+Fixture yang diperlukan: `vless-node.txt`, `vmess-node.txt`, `trojan-node.txt`, dan `shadowsocks-node.txt`. Output runner tidak mencetak share link, UUID, password, atau credential.
 
 Harness lokal tersedia tanpa node subscription nyata:
 

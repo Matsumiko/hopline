@@ -14,6 +14,36 @@ class PickerFailoverTests(unittest.TestCase):
         self.assertEqual(picker.candidates("rotate"), ["b"])
         self.assertEqual(picker.candidates("a"), [])
 
+    def test_gateway_rejects_missing_proxy_credential(self) -> None:
+        async def scenario() -> None:
+            async def upstream_handler(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                writer.close()
+                await writer.wait_closed()
+
+            upstream = await asyncio.start_server(upstream_handler, "127.0.0.1", 0)
+            gateway = Gateway(
+                host="127.0.0.1",
+                port=0,
+                generation_port=upstream.sockets[0].getsockname()[1],
+                generation_credentials={"node": "secret"},
+            )
+            await gateway.start()
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
+                writer.write(b"CONNECT target.test:443 HTTP/1.1\r\n\r\n")
+                await writer.drain()
+                response = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)
+                self.assertTrue(response.startswith(b"HTTP/1.1 407"))
+                writer.close()
+                await writer.wait_closed()
+            finally:
+                await gateway.stop()
+                await gateway.wait_closed()
+                upstream.close()
+                await upstream.wait_closed()
+
+        asyncio.run(scenario())
+
     def test_gateway_fails_over_before_client_200(self) -> None:
         async def scenario() -> None:
             attempts: list[str] = []
