@@ -149,17 +149,28 @@ class ParserConfigTests(unittest.TestCase):
                 "?security=tls&type=ws&path=%2Fnode-b&host=relay-b.example.test"
             ),
         ]
-        config = build_config(nodes, listen_port=18771)
+        config = build_config(
+            nodes,
+            listen_port=18771,
+            credentials={nodes[0].id: "secret-a", nodes[1].id: "secret-b"},
+        )
 
-        self.assertEqual(config["dns"]["final"], "dns-remote")
+        self.assertEqual(config["dns"]["final"], "dns-direct")
         self.assertEqual(
             config["dns"]["servers"],
             [
                 {
                     "type": "tls",
-                    "tag": "dns-remote",
+                    "tag": f"dns-remote-{nodes[0].id}",
                     "server": "8.8.8.8",
-                    "detour": "proxy-auto",
+                    "detour": nodes[0].id,
+                    "domain_resolver": "dns-direct",
+                },
+                {
+                    "type": "tls",
+                    "tag": f"dns-remote-{nodes[1].id}",
+                    "server": "8.8.8.8",
+                    "detour": nodes[1].id,
                     "domain_resolver": "dns-direct",
                 },
                 {"type": "local", "tag": "dns-direct"},
@@ -172,18 +183,26 @@ class ParserConfigTests(unittest.TestCase):
                     "action": "route",
                     "domain": ["relay-a.example.test", "relay-b.example.test"],
                     "server": "dns-direct",
-                }
+                },
+                {"auth_user": [nodes[0].id], "server": f"dns-remote-{nodes[0].id}"},
+                {"auth_user": [nodes[1].id], "server": f"dns-remote-{nodes[1].id}"},
             ],
         )
         self.assertEqual(config["route"]["default_domain_resolver"], "dns-direct")
         self.assertEqual(
-            config["outbounds"][-2],
-            {
-                "type": "selector",
-                "tag": "proxy-auto",
-                "outbounds": [node.id for node in nodes],
-                "default": nodes[0].id,
-            },
+            config["inbounds"][0]["users"],
+            [
+                {"username": nodes[0].id, "password": "secret-a"},
+                {"username": nodes[1].id, "password": "secret-b"},
+            ],
+        )
+        auth_routes = [rule for rule in config["route"]["rules"] if "auth_user" in rule]
+        self.assertEqual(
+            auth_routes,
+            [
+                {"inbound": ["mixed-in"], "auth_user": [nodes[0].id], "outbound": nodes[0].id},
+                {"inbound": ["mixed-in"], "auth_user": [nodes[1].id], "outbound": nodes[1].id},
+            ],
         )
 
     def test_config_resolves_relay_domains_locally_without_remote_dns_loop(self) -> None:
@@ -192,8 +211,9 @@ class ParserConfigTests(unittest.TestCase):
             "?security=tls&type=ws&path=%2Fnode&host=relay.example.test"
         )
         config = build_config([node], listen_port=18771)
-        self.assertEqual(config["dns"]["final"], "dns-remote")
+        self.assertEqual(config["dns"]["final"], "dns-direct")
         self.assertEqual(config["dns"]["rules"][0]["server"], "dns-direct")
+        self.assertEqual(config["dns"]["rules"][1], {"auth_user": [node.id], "server": f"dns-remote-{node.id}"})
         self.assertEqual(config["outbounds"][0]["domain_resolver"], "dns-direct")
         self.assertEqual(config["route"]["default_domain_resolver"], "dns-direct")
 

@@ -106,23 +106,28 @@ def _outbound(node: Node) -> dict[str, Any]:
 
 def _dns_config(nodes: list[Node]) -> dict[str, Any]:
     relay_domains = sorted({node.server for node in nodes if node.server})
+    remote_servers = [
+        {
+            "type": "tls",
+            "tag": f"dns-remote-{node.id}",
+            "server": "8.8.8.8",
+            "detour": node.id,
+            "domain_resolver": "dns-direct",
+        }
+        for node in nodes
+    ]
+    remote_rules = [
+        {"auth_user": [node.id], "server": f"dns-remote-{node.id}"}
+        for node in nodes
+    ]
     return {
-        "servers": [
-            {
-                "type": "tls",
-                "tag": "dns-remote",
-                "server": "8.8.8.8",
-                "detour": "proxy-auto",
-                "domain_resolver": "dns-direct",
-            },
-            {"type": "local", "tag": "dns-direct"},
-        ],
+        "servers": remote_servers + [{"type": "local", "tag": "dns-direct"}],
         "rules": (
-            [{"action": "route", "domain": relay_domains, "server": "dns-direct"}]
-            if relay_domains
-            else []
+            ([{"action": "route", "domain": relay_domains, "server": "dns-direct"}]
+             if relay_domains else [])
+            + remote_rules
         ),
-        "final": "dns-remote",
+        "final": "dns-direct",
     }
 
 
