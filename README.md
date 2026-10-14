@@ -126,9 +126,8 @@ useradd --system --gid hopline --home-dir /var/lib/hopline --shell /usr/sbin/nol
 install -d -o root -g root -m 0755 /opt/hopline/app
 install -d -o hopline -g hopline -m 0700 /var/lib/hopline
 install -d -o root -g hopline -m 0750 /etc/hopline
-cp -a hopline experiments tools /opt/hopline/app/
+install -o hopline -g hopline -m 0600 hopline.toml /etc/hopline/hopline.toml
 install -o root -g root -m 0644 packaging/hopline.service /etc/systemd/system/hopline.service
-install -o root -g hopline -m 0640 hopline.toml /etc/hopline/hopline.toml
 systemctl daemon-reload
 systemctl enable --now hopline.service
 ```

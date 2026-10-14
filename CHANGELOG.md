@@ -169,4 +169,9 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Optional localhost Prometheus endpoint `/metrics`, disabled by default.
 - Bounded metrics: node count, health-state count, and active-probe enabled state.
 - Metrics configuration for bind host and port with localhost validation.
+
+### Verified
+
+- Staging host install completed with systemd user/group, private config, writable SQLite state, control API, and localhost metrics endpoint.
+- Proxy smoke remains blocked until `sing-box` is installed on the staging host; `doctor` reports `sing_box=false` and no local proxy listener is available.
 - Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.
