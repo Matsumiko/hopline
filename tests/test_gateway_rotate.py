@@ -35,12 +35,13 @@ class GatewayRotateTests(unittest.TestCase):
                 port=0,
                 generation_port=upstream_port,
                 generation_credentials={"node-a": "x", "node-b": "x"},
+                proxy_password="x",
             )
             await gateway.start()
             try:
                 for expected in (b"node-a", b"node-b"):
                     reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
-                    token = base64.b64encode(b"rotate:x").decode()
+                    token = base64.b64encode(b"hopline:x").decode()
                     writer.write(
                         f"CONNECT target.test:443 HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode()
                     )

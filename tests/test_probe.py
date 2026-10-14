@@ -16,7 +16,7 @@ class ProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "hopline.toml"
             path.write_text(
-                '[hopline]\ndatabase = "registry.db"\n\n[[subscriptions]]\nurl = "https://example.test/sub"\n\n[health]\ntargets = ["https://provider.test/health"]\ninterval = 60\ntimeout = 5\n',
+                '[hopline]\ndatabase = "registry.db"\n\n[auth]\npassword = "fixture-local-password"\n\n[[subscriptions]]\nurl = "https://example.test/sub"\n\n[health]\ntargets = ["https://provider.test/health"]\ninterval = 60\ntimeout = 5\n',
                 encoding="utf-8",
             )
             path.chmod(stat.S_IRUSR | stat.S_IWUSR)

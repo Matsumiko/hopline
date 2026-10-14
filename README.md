@@ -20,11 +20,11 @@ Hopline ditujukan untuk developer atau tim kecil yang menjalankan script/bot di 
 ## Interface Target
 
 ```bash
-export HTTPS_PROXY=http://rotate:x@127.0.0.1:18770
+export HTTPS_PROXY=http://hopline:password-lokal@127.0.0.1:18770
 curl https://api.ipify.org
 ```
 
-Interface utama adalah HTTP proxy dengan dukungan `CONNECT`. `rotate` memilih node per koneksi proxy, bukan otomatis per HTTP request jika client memakai connection pooling.
+Interface utama adalah HTTP proxy dengan dukungan `CONNECT`. Username `hopline` dan password pada `[auth]` adalah credential lokal Hopline; credential node/provider tidak boleh dipakai oleh client. `rotate` tetap dipilih secara internal, per koneksi proxy, bukan otomatis per HTTP request jika client memakai connection pooling.
 
 ## Arsitektur Singkat
 
@@ -73,11 +73,15 @@ sing_box_binary = "/usr/local/bin/sing-box"
 engine_workdir = "/var/lib/hopline/engine"
 max_active_connections = 64
 
+[auth]
+username = "hopline"
+password = "password-lokal-yang-kuat"
+
 [[subscriptions]]
 url = "https://example.invalid/subscription"
 ```
 
-`[[subscriptions]]` dapat dihilangkan jika hanya memakai `static_nodes`. Credential node harus tetap berada di file private.
+`[auth]` wajib berisi username dan password lokal. Simpan file TOML dengan permission `0600`. Credential node/provider tetap berada internal Hopline dan tidak pernah menjadi credential client.
 
 Jalankan sekali atau sebagai daemon:
 

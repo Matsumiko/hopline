@@ -21,7 +21,7 @@ class ConfigDaemonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "hopline.toml"
             path.write_text(
-                '[hopline]\ndatabase = "registry.db"\ninterval = 60\njitter = 5\n\n[[subscriptions]]\nurl = "https://example.test/sub"\n',
+                '[hopline]\ndatabase = "registry.db"\ninterval = 60\njitter = 5\n\n[auth]\nusername = "hopline"\npassword = "fixture-local-password"\n\n[[subscriptions]]\nurl = "https://example.test/sub"\n',
                 encoding="utf-8",
             )
             path.chmod(stat.S_IRUSR | stat.S_IWUSR)
@@ -45,7 +45,7 @@ class ConfigDaemonTests(unittest.TestCase):
             config_path = Path(directory) / "hopline.toml"
             link = "vless://00000000-0000-4000-8000-000000000032@example.test:443?security=tls&type=ws&path=/x&host=example.test"
             config_path.write_text(
-                f'static_nodes = [{link!r}]\n\n[hopline]\ndatabase = "{directory}/registry.db"\n',
+                f'static_nodes = [{link!r}]\n\n[hopline]\ndatabase = "{directory}/registry.db"\n\n[auth]\npassword = "fixture-local-password"\n',
                 encoding="utf-8",
             )
             config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
@@ -57,7 +57,7 @@ class ConfigDaemonTests(unittest.TestCase):
             config_path = Path(directory) / "hopline.toml"
             database = Path(directory) / "registry.db"
             config_path.write_text(
-                f'[hopline]\ndatabase = "{database}"\ninterval = 60\n\n[[subscriptions]]\nurl = "https://example.test/sub"\n',
+                f'[hopline]\ndatabase = "{database}"\ninterval = 60\n\n[auth]\npassword = "fixture-local-password"\n\n[[subscriptions]]\nurl = "https://example.test/sub"\n',
                 encoding="utf-8",
             )
             config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
@@ -89,6 +89,7 @@ class ConfigDaemonTests(unittest.TestCase):
                 config_path.write_text(
                     f'[hopline]\ndatabase = "{database}"\ninterval = 60\n'
                     f'gateway_port = 18779\ntunnel_port = 18979\nengine_workdir = "{workdir}"\n\n'
+                    '[auth]\npassword = "fixture-local-password"\n\n'
                     f'[[subscriptions]]\nurl = "http://127.0.0.1:{port}/subscription"\n',
                     encoding="utf-8",
                 )

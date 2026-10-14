@@ -10,7 +10,7 @@ Hopline memperlakukan hal berikut sebagai secret:
 - secret Clash API;
 - API key atau credential yang kebetulan lewat konfigurasi client.
 
-Secret tidak boleh muncul di log, metrics, exception, error response, fixture publik, repository, atau output CLI.
+Secret tidak boleh muncul di log, metrics, exception, error response, fixture publik, repository, atau output CLI. Credential client Hopline hanya digunakan untuk autentikasi gateway lokal dan tidak boleh diteruskan ke sing-box atau provider node.
 
 ## Aturan Penyimpanan
 

@@ -26,11 +26,47 @@ class PickerFailoverTests(unittest.TestCase):
                 port=0,
                 generation_port=upstream.sockets[0].getsockname()[1],
                 generation_credentials={"node": "secret"},
+                proxy_password="x",
             )
             await gateway.start()
             try:
                 reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
                 writer.write(b"CONNECT target.test:443 HTTP/1.1\r\n\r\n")
+                await writer.drain()
+                response = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)
+                self.assertTrue(response.startswith(b"HTTP/1.1 407"))
+                writer.close()
+                await writer.wait_closed()
+            finally:
+                await gateway.stop()
+                await gateway.wait_closed()
+                upstream.close()
+                await upstream.wait_closed()
+
+        asyncio.run(scenario())
+
+    def test_gateway_rejects_wrong_local_password(self) -> None:
+        async def scenario() -> None:
+            async def upstream_handler(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                writer.close()
+                await writer.wait_closed()
+
+            upstream = await asyncio.start_server(upstream_handler, "127.0.0.1", 0)
+            gateway = Gateway(
+                host="127.0.0.1",
+                port=0,
+                generation_port=upstream.sockets[0].getsockname()[1],
+                generation_credentials={"node": "upstream-secret"},
+                proxy_username="hopline",
+                proxy_password="local-secret",
+            )
+            await gateway.start()
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
+                token = base64.b64encode(b"hopline:wrong-secret").decode()
+                writer.write(
+                    f"CONNECT target.test:443 HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode()
+                )
                 await writer.drain()
                 response = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)
                 self.assertTrue(response.startswith(b"HTTP/1.1 407"))
@@ -74,13 +110,14 @@ class PickerFailoverTests(unittest.TestCase):
                 port=0,
                 generation_port=port,
                 generation_credentials={"node-a": "x", "node-b": "x"},
+                proxy_password="x",
                 record_success=successes.append,
                 record_failure=lambda node, error: failures.append((node, error)),
             )
             await gateway.start()
             try:
                 reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
-                token = base64.b64encode(b"rotate:x").decode()
+                token = base64.b64encode(b"hopline:x").decode()
                 writer.write(f"CONNECT target.test:443 HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode())
                 await writer.drain()
                 response = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)

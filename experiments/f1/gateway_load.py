@@ -27,9 +27,10 @@ async def run(concurrency: int = 16, limit: int = 4) -> None:
     gateway = Gateway(
         host="127.0.0.1", port=0, generation_port=upstream_port,
         generation_credentials={"node-a": "x"}, max_active_connections=limit,
+        proxy_password="x",
     )
     await gateway.start()
-    token = base64.b64encode(b"node-a:x").decode()
+    token = base64.b64encode(b"hopline:x").decode()
 
     async def request() -> int:
         reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)

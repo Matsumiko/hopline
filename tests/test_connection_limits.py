@@ -27,9 +27,10 @@ class ConnectionLimitTests(unittest.TestCase):
             gateway = Gateway(
                 host="127.0.0.1", port=0, generation_port=upstream_port,
                 generation_credentials={"node-a": "x"}, max_active_connections=1,
+                proxy_password="x",
             )
             await gateway.start()
-            token = base64.b64encode(b"node-a:x").decode()
+            token = base64.b64encode(b"hopline:x").decode()
             first_reader, first_writer = await asyncio.open_connection("127.0.0.1", gateway.port)
             first_writer.write(f"CONNECT origin.test:443 HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode())
             await first_writer.drain()

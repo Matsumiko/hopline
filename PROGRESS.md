@@ -91,7 +91,9 @@ DNS audit: generation config now declares `dns-local` as the default resolver an
 - The smoke runner starts only ephemeral sing-box and Hopline Gateway listeners; production service was not restarted or reconfigured.
 - Production deployment of commit `7b02aef` completed on the authorized Debian 12 VPS after artifact checksum verification, generated four-node `sing-box check`, and rollback backup creation. `hopline.service` restarted successfully and remained active with localhost listeners on ports 18770–18773.
 - Production gateway smoke passed: VLESS, VMess, Trojan, and Shadowsocks each returned HTTP 200 through `127.0.0.1:18770`; missing `Proxy-Authorization` returned HTTP 407. Control status reported 4 nodes healthy and metrics returned HTTP 200. Rollback tree remains available.
-- Validasi dokumentasi selesai sebelum eksperimen F0.
+Local Gateway auth: `[auth]` username/password sekarang wajib, client memakai credential lokal, dan Gateway tidak lagi menerima password node sebagai autentikasi client. Wrong/missing credentials menghasilkan 407; local auth diteruskan sebagai credential terpisah dari credential node.
+Verification: 51 regression tests tanpa daemon control-port collision lulus; `PYTHONPATH=. python3 tools/smoke_ephemeral.py --fixture-dir . --timeout 20` lulus untuk VLESS, VMess, Trojan, dan Shadowsocks dengan authenticated HTTP 200 serta wrong/missing local credential HTTP 407. Production service tidak disentuh.
+Daemon tests yang menjalankan control listener tidak dapat dijalankan pada workspace ini karena `127.0.0.1:18772` sedang dipakai service production; ini environment collision, bukan failure assertion auth.
 
 ## Blocker / Risiko Aktif
 

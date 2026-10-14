@@ -161,6 +161,8 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             record_success=lambda node_id: health.record_success(node_id),
             record_failure=lambda node_id, error: health.record_failure(node_id, error),
             max_active_connections=config.max_active_connections,
+            proxy_username=config.proxy_username,
+            proxy_password=config.proxy_password,
         )
         await gateway.start()
         if config.probe_targets:

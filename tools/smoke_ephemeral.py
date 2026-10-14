@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 import shutil
@@ -68,10 +69,13 @@ def clean_curl_environment() -> dict[str, str]:
     return environment
 
 
-async def missing_credential_status(port: int) -> str:
+async def proxy_status(port: int, authorization: str | None) -> str:
     reader, writer = await asyncio.open_connection("127.0.0.1", port)
     try:
-        writer.write(b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n")
+        request = b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n"
+        if authorization is not None:
+            request += b"Proxy-Authorization: Basic " + authorization.encode("ascii") + b"\r\n"
+        writer.write(request + b"\r\n")
         await writer.drain()
         response = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 3)
         return response.split(b" ", 2)[1].decode("ascii")
@@ -80,7 +84,7 @@ async def missing_credential_status(port: int) -> str:
         await writer.wait_closed()
 
 
-def curl_status(port: int, node: Node, *, authenticate: bool, timeout: float) -> str:
+def curl_status(port: int, *, username: str, password: str, timeout: float) -> str:
     command = [
         "curl",
         "--silent",
@@ -93,13 +97,10 @@ def curl_status(port: int, node: Node, *, authenticate: bool, timeout: float) ->
         str(timeout),
         "--proxy",
         f"http://127.0.0.1:{port}",
+        "--proxy-user",
+        f"{username}:{password}",
         "https://api.ipify.org?format=json",
     ]
-    if authenticate:
-        command[command.index("https://api.ipify.org?format=json"):command.index("https://api.ipify.org?format=json")] = [
-            "--proxy-user",
-            f"{node.id}:{node.credential}",
-        ]
     result = subprocess.run(
         command,
         check=False,
@@ -148,6 +149,8 @@ async def gateway_smoke(port: int, tunnel_port: int, node: Node, timeout: float)
         port=0,
         generation_port=tunnel_port,
         generation_credentials={node.id: node.credential},
+        proxy_username="hopline",
+        proxy_password="fixture-local-password",
     )
     await gateway.start()
     try:
@@ -155,14 +158,18 @@ async def gateway_smoke(port: int, tunnel_port: int, node: Node, timeout: float)
         if gateway_port is None:
             raise RuntimeError("ephemeral Hopline gateway did not open")
         authenticated = await asyncio.to_thread(
-            curl_status, gateway_port, node, authenticate=True, timeout=timeout
+            curl_status, gateway_port, username="hopline", password="fixture-local-password", timeout=timeout
         )
-        unauthenticated = await missing_credential_status(gateway_port)
+        invalid = await proxy_status(
+            gateway_port,
+            base64.b64encode(b"hopline:wrong-password").decode("ascii"),
+        )
+        unauthenticated = await proxy_status(gateway_port, None)
         if not 200 <= int(authenticated) <= 399:
-            raise RuntimeError("authenticated CONNECT did not reach the target")
-        if unauthenticated != "407":
-            raise RuntimeError("missing proxy credential did not return 407")
-        return {"authenticated": authenticated, "missing_credential": unauthenticated}
+            raise RuntimeError(f"authenticated CONNECT did not reach the target (status {authenticated})")
+        if invalid != "407" or unauthenticated != "407":
+            raise RuntimeError("invalid or missing proxy credential did not return 407")
+        return {"authenticated": authenticated, "invalid_credential": invalid, "missing_credential": unauthenticated}
     finally:
         await gateway.stop()
         await gateway.wait_closed()

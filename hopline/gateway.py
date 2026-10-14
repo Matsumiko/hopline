@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import binascii
+import hmac
 from collections.abc import Callable
 
 from .health import HealthState
@@ -21,9 +21,13 @@ class Gateway:
         record_success: Callable[[str], None] | None = None,
         record_failure: Callable[[str, str], None] | None = None,
         max_active_connections: int = 64,
+        proxy_username: str = "hopline",
+        proxy_password: str = "",
     ) -> None:
         if max_active_connections <= 0:
             raise ValueError("max_active_connections must be positive")
+        if not proxy_username or not proxy_password:
+            raise ValueError("proxy authentication credentials must be non-empty")
         self.host = host
         self._requested_port = port
         self._generation_port = generation_port
@@ -32,6 +36,8 @@ class Gateway:
         self._record_success = record_success
         self._record_failure = record_failure
         self._max_active_connections = max_active_connections
+        self._proxy_username = proxy_username
+        self._proxy_password = proxy_password
         self._active_connections: dict[str, int] = {node_id: 0 for node_id in generation_credentials}
         self._accepting = False
         self._server: asyncio.AbstractServer | None = None
@@ -95,7 +101,10 @@ class Gateway:
             if auth_value is None:
                 await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
                 return
-            requested_node = self._node_from_auth(auth_value)
+            requested_node = self._route_from_auth(auth_value)
+            if requested_node is None:
+                await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+                return
             candidates = self._picker.candidates(requested_node)
             if not candidates:
                 await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
@@ -223,16 +232,23 @@ class Gateway:
         writer.write(response)
         await writer.drain()
 
-    @staticmethod
-    def _node_from_auth(value: str | None) -> str | None:
+    def _route_from_auth(self, value: str | None) -> str | None:
         if value is None or not value.lower().startswith("basic "):
             return None
         try:
             decoded = base64.b64decode(value[6:], validate=True).decode("utf-8")
         except (binascii.Error, UnicodeDecodeError):
             return None
-        username, separator, _password = decoded.partition(":")
-        return username if separator and username else None
+        username, separator, password = decoded.partition(":")
+        if not separator or not username or not hmac.compare_digest(password, self._proxy_password):
+            return None
+        if username == self._proxy_username or username == "rotate":
+            return "rotate"
+        if username in self._generation_credentials:
+            return username
+        if username.startswith("node-") and username[5:] in self._generation_credentials:
+            return username[5:]
+        return None
 
     @staticmethod
     def _target_host_port(target: str) -> tuple[str, int]:

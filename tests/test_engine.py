@@ -98,11 +98,12 @@ class SingBoxEngineTests(unittest.TestCase):
                     port=0,
                     generation_port=generation.port,
                     generation_credentials={"node-a": "fixture-secret"},
+                    proxy_password="x",
                 )
                 await gateway.start()
                 try:
                     reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
-                    writer.write(f"CONNECT 127.0.0.1:{target_port} HTTP/1.1\r\nProxy-Authorization: Basic bm9kZS1hOng=\r\n\r\n".encode())
+                    writer.write(f"CONNECT 127.0.0.1:{target_port} HTTP/1.1\r\nProxy-Authorization: Basic aG9wbGluZTp4\r\n\r\n".encode())
                     await writer.drain()
                     self.assertTrue((await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 3)).startswith(b"HTTP/1.1 200"))
                     writer.write(f"GET / HTTP/1.1\r\nHost: local\r\n\r\n".encode())

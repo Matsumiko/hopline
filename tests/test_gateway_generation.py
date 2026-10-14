@@ -33,13 +33,14 @@ class GatewayGenerationTests(unittest.TestCase):
                 port=0,
                 generation_port=old_port,
                 generation_credentials={"node": "x"},
+                proxy_password="x",
             )
             await gateway.start()
             try:
                 reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
                 writer.write(
                     b"CONNECT target.test:443 HTTP/1.1\r\n"
-                    b"Proxy-Authorization: Basic bm9kZTp4\r\n\r\n"
+                    b"Proxy-Authorization: Basic aG9wbGluZTp4\r\n\r\n"
                 )
                 await writer.drain()
                 await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)

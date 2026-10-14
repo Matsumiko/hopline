@@ -46,6 +46,7 @@ class GenerationGatewayTests(unittest.TestCase):
                 port=0,
                 generation_port=upstream_port,
                 generation_credentials={"node-a": "x"},
+                proxy_password="x",
             )
             await gateway.start()
             gateway_port = gateway.port
@@ -55,7 +56,7 @@ class GenerationGatewayTests(unittest.TestCase):
             writer.write(
                 b"CONNECT example.test:443 HTTP/1.1\r\n"
                 b"Host: example.test:443\r\n"
-                b"Proxy-Authorization: Basic bm9kZS1hOng=\r\n\r\n"
+                    b"Proxy-Authorization: Basic aG9wbGluZTp4\r\n\r\n"
             )
             await writer.drain()
             self.assertEqual(

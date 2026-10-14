@@ -61,10 +61,11 @@ async def run() -> None:
     gateway = Gateway(
         host="127.0.0.1", port=0, generation_port=proxy_port,
         generation_credentials={"node-a": "x"}, max_active_connections=1,
+        proxy_password="x",
     )
     await gateway.start()
     client_reader, client_writer = await asyncio.open_connection("127.0.0.1", gateway.port)
-    token = base64.b64encode(b"node-a:x").decode()
+    token = base64.b64encode(b"hopline:x").decode()
     client_writer.write(f"CONNECT 127.0.0.1:{origin_port} HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode())
     await client_writer.drain()
     response = await asyncio.wait_for(client_reader.readuntil(b"\r\n\r\n"), 3)

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import os
 import stat
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -30,6 +29,8 @@ class HoplineConfig:
     metrics_enabled: bool = False
     metrics_host: str = "127.0.0.1"
     metrics_port: int = 18773
+    proxy_username: str = field(default="hopline", repr=False)
+    proxy_password: str = field(default="", repr=False)
 
     @classmethod
     def from_file(cls, path: str | Path) -> "HoplineConfig":
@@ -104,6 +105,16 @@ class HoplineConfig:
         metrics_enabled = bool(health.get("metrics_enabled", False))
         metrics_host = str(health.get("metrics_host", "127.0.0.1"))
         metrics_port = int(health.get("metrics_port", 18773))
+        auth = document.get("auth", {})
+        if not isinstance(auth, dict):
+            raise ValueError("[auth] section must be a table")
+        proxy_username = auth.get("username", "hopline")
+        proxy_password = auth.get("password")
+        if not isinstance(proxy_username, str) or not proxy_username:
+            raise ValueError("auth.username must be a non-empty string")
+        if not isinstance(proxy_password, str) or not proxy_password:
+            raise ValueError("auth.password must be a non-empty string")
+
         if interval <= 0 or jitter < 0 or jitter >= interval:
             raise ValueError("interval and jitter are invalid")
         if gateway_host not in {"127.0.0.1", "::1", "localhost"} or not 0 <= gateway_port <= 65535:
@@ -139,6 +150,8 @@ class HoplineConfig:
             metrics_enabled=metrics_enabled,
             metrics_host=metrics_host,
             metrics_port=metrics_port,
+            proxy_username=proxy_username,
+            proxy_password=proxy_password,
         )
     @classmethod
     def from_environment(cls) -> "HoplineConfig":
