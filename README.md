@@ -89,6 +89,8 @@ GET /nodes
 
 Health state dasar: `healthy`, `degraded`, `dead`, dan `quarantine`. Response hanya memuat node ID, protocol, host, port, nama, state, counters, dan latency; credential tidak pernah dikembalikan.
 
+Gateway memilih node `healthy` atau `degraded`; node `dead` dan `quarantine` dilewati. Jika CONNECT ke node gagal atau upstream menolak sebelum respons `200`, gateway mencoba kandidat berikutnya. Hopline baru mengirim `200 Connection Established` setelah upstream berhasil, sehingga retry tidak terjadi setelah byte client diteruskan.
+
 ## Batasan
 
 - Bukan VPN level jaringan.

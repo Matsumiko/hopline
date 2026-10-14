@@ -3,6 +3,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+from collections.abc import Callable
+
+from .health import HealthState
+from .picker import NodePicker
+
 
 class Gateway:
     def __init__(
@@ -12,16 +17,21 @@ class Gateway:
         port: int,
         generation_port: int,
         generation_credentials: dict[str, str],
+        health_state: Callable[[str], HealthState | str | None] | None = None,
+        record_success: Callable[[str], None] | None = None,
+        record_failure: Callable[[str, str], None] | None = None,
     ) -> None:
         self.host = host
         self._requested_port = port
         self._generation_port = generation_port
         self._generation_credentials = dict(generation_credentials)
-        self._node_order = tuple(generation_credentials)
-        self._next_node = 0
+        self._picker = NodePicker(generation_credentials, state=health_state)
+        self._record_success = record_success
+        self._record_failure = record_failure
         self._accepting = False
         self._server: asyncio.AbstractServer | None = None
         self._tasks: set[asyncio.Task[None]] = set()
+
     @property
     def port(self) -> int | None:
         if self._server is None or not self._server.sockets:
@@ -32,9 +42,7 @@ class Gateway:
         if self._server is not None:
             raise RuntimeError("gateway is already running")
         self._accepting = True
-        self._server = await asyncio.start_server(
-            self._accept, self.host, self._requested_port
-        )
+        self._server = await asyncio.start_server(self._accept, self.host, self._requested_port)
 
     def publish_generation(
         self, generation_port: int, generation_credentials: dict[str, str]
@@ -44,8 +52,7 @@ class Gateway:
             raise ValueError("generation must contain at least one node")
         self._generation_port = generation_port
         self._generation_credentials = dict(generation_credentials)
-        self._node_order = tuple(generation_credentials)
-        self._next_node = 0
+        self._picker.replace(generation_credentials)
 
     async def stop(self) -> None:
         """Stop accepting new clients; preserve existing relay streams."""
@@ -61,9 +68,7 @@ class Gateway:
             server.close()
             await server.wait_closed()
 
-    async def _accept(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _accept(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         if not self._accepting:
             writer.close()
             await writer.wait_closed()
@@ -72,38 +77,53 @@ class Gateway:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _handle(
-        self, reader: asyncio.StreamReader, client: asyncio.StreamWriter
-    ) -> None:
+    async def _handle(self, reader: asyncio.StreamReader, client: asyncio.StreamWriter) -> None:
         upstream: asyncio.StreamWriter | None = None
         try:
-            request = await asyncio.wait_for(self._read_headers(reader), 5)
-            method, target, headers = request
+            method, target, headers = await asyncio.wait_for(self._read_headers(reader), 5)
             if method.upper() != "CONNECT":
                 await self._respond(client, b"HTTP/1.1 501 Not Implemented\r\n\r\n")
                 return
             requested_node = self._node_from_auth(headers.get("proxy-authorization"))
-            node_id = self._select_node(requested_node)
-            if node_id is None:
+            candidates = self._picker.candidates(requested_node)
+            if not candidates:
                 await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
                 return
-            upstream = await asyncio.wait_for(
-                asyncio.open_connection("127.0.0.1", self._generation_port), 3
-            )
-            upstream_reader, upstream = upstream
-            credential = self._generation_credentials[node_id]
-            token = base64.b64encode(f"{node_id}:{credential}".encode()).decode()
-            upstream.write(
-                f"CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n".encode()
-                + f"Proxy-Authorization: Basic {token}\r\n\r\n".encode()
-            )
-            await upstream.drain()
-            response = await asyncio.wait_for(self._read_response(upstream_reader), 3)
-            if not response.startswith(b"HTTP/1.1 200"):
-                await self._respond(client, response)
-                return
-            await self._respond(client, b"HTTP/1.1 200 Connection Established\r\n\r\n")
-            await self._relay(reader, client, upstream_reader, upstream)
+
+            last_response: bytes | None = None
+            for node_id in candidates:
+                try:
+                    upstream_reader, upstream = await asyncio.wait_for(
+                        asyncio.open_connection("127.0.0.1", self._generation_port), 3
+                    )
+                    credential = self._generation_credentials[node_id]
+                    token = base64.b64encode(f"{node_id}:{credential}".encode()).decode()
+                    upstream.write(
+                        f"CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n".encode()
+                        + f"Proxy-Authorization: Basic {token}\r\n\r\n".encode()
+                    )
+                    await upstream.drain()
+                    response = await asyncio.wait_for(self._read_response(upstream_reader), 3)
+                    if response.startswith(b"HTTP/1.1 200"):
+                        if self._record_success is not None:
+                            self._record_success(node_id)
+                        await self._respond(client, b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                        await self._relay(reader, client, upstream_reader, upstream)
+                        return
+                    last_response = response
+                    self._report_failure(node_id, "upstream_rejected")
+                except (asyncio.TimeoutError, asyncio.IncompleteReadError, ConnectionError, OSError) as error:
+                    self._report_failure(node_id, type(error).__name__)
+                finally:
+                    if upstream is not None and not upstream.is_closing():
+                        upstream.close()
+                        try:
+                            await upstream.wait_closed()
+                        except ConnectionError:
+                            pass
+                    upstream = None
+
+            await self._respond(client, last_response or b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, ConnectionError, OSError, ValueError):
             if not client.is_closing():
                 try:
@@ -124,6 +144,10 @@ class Gateway:
                 except ConnectionError:
                     pass
 
+    def _report_failure(self, node_id: str, error: str) -> None:
+        if self._record_failure is not None:
+            self._record_failure(node_id, error)
+
     async def _relay(
         self,
         client_reader: asyncio.StreamReader,
@@ -131,9 +155,7 @@ class Gateway:
         upstream_reader: asyncio.StreamReader,
         upstream_writer: asyncio.StreamWriter,
     ) -> None:
-        async def pipe(
-            reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-        ) -> None:
+        async def pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             try:
                 while data := await reader.read(65536):
                     writer.write(data)
@@ -152,9 +174,7 @@ class Gateway:
         )
 
     @staticmethod
-    async def _read_headers(
-        reader: asyncio.StreamReader,
-    ) -> tuple[str, str, dict[str, str]]:
+    async def _read_headers(reader: asyncio.StreamReader) -> tuple[str, str, dict[str, str]]:
         raw = await reader.readuntil(b"\r\n\r\n")
         lines = raw.decode("latin-1").split("\r\n")
         method, target, _version = lines[0].split(" ", 2)
@@ -184,17 +204,6 @@ class Gateway:
             return None
         username, separator, _password = decoded.partition(":")
         return username if separator and username else None
-
-    def _select_node(self, requested: str | None) -> str | None:
-        if requested == "rotate":
-            if not self._node_order:
-                return None
-            node_id = self._node_order[self._next_node % len(self._node_order)]
-            self._next_node += 1
-            return node_id
-        if requested in self._generation_credentials:
-            return requested
-        return None
 
     @staticmethod
     def _target_host_port(target: str) -> tuple[str, int]:

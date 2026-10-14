@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; active picker/failover belum tersedia.
-- **Last verified:** 32 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, dan control API smoke lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; active probe scheduler belum tersedia.
+- **Last verified:** 34 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, control API smoke, dan pre-byte failover regression lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,15 +26,14 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan health-aware picker/failover dan control-plane hardening.
+- Melanjutkan Fase 1 dengan active probe scheduler dan control-plane hardening.
 
 ## Berikutnya
 
-1. Integrasikan health state ke picker dan failover sebelum byte diteruskan.
-2. Tambahkan active probe scheduler dengan target konfigurasi.
-3. Tambahkan load test untuk batas koneksi aktif per node.
-4. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
-5. Siapkan systemd install/runbook setelah review service host.
+1. Tambahkan active probe scheduler dengan target konfigurasi.
+2. Tambahkan load test untuk batas koneksi aktif per node.
+3. Uji Gate F1 end-to-end melalui `HTTPS_PROXY`.
+4. Siapkan systemd install/runbook setelah review service host.
 
 ## Bukti
 
@@ -57,14 +56,15 @@ timeout 10s python3 experiments/f0/generation_swap.py
 Observed: `generation_swap=passed active_stream_preserved=passed new_connections_use_new_generation=passed`.
 
 F1 test suite:
-
 ```text
-python3 -m py_compile hopline/*.py tests/*.py
+
 python3 -W error::ResourceWarning -m unittest discover -s tests -v
-Ran 32 tests — OK
+Ran 34 tests — OK
 ```
 
 Health/control integration mencakup passive success/failure transitions, active probe seam, SQLite health persistence, localhost-only `/status` dan `/nodes`, CLI `status`/`nodes`, dan response redaction.
+
+Picker/failover integration mencakup skip `dead`/`quarantine`, feedback passive dari CONNECT, retry kandidat berikutnya saat upstream gagal sebelum `200`, dan larangan retry setelah relay dimulai.
 
 Sync integration mencakup base64/share-link, Clash YAML, sing-box JSON, VLESS/Trojan/VMess/Shadowsocks, invalid-entry isolation, valid registry fallback, ETag/Last-Modified metadata, HTTP 304 no-op, fetch failure fallback, removed hysteresis tiga sync, scheduler sync, CLI contract, persistent TOML permission validation, daemon once, dan generation apply.
 
@@ -72,7 +72,9 @@ Live subscription smoke: `parsed=100`, `invalid=0`, protokol `ss/trojan/vless/vm
 
 Control smoke: `/status` menghasilkan JSON `nodes=1`, `schema_version=1`, tanpa credential.
 
-Gate F1: **in progress**. Health registry dan control API dasar lulus; health-aware picker/failover, active probe scheduler, acceptance melalui `HTTPS_PROXY`, dan host installation runbook belum selesai.
+Failover smoke: node pertama menerima `502`, node kedua menerima CONNECT, client menerima satu `200` setelah kandidat kedua siap.
+
+Gate F1: **in progress**. Health-aware picker/failover, registry, dan control API dasar lulus; active probe scheduler, acceptance melalui `HTTPS_PROXY`, dan host installation runbook belum selesai.
 
 ## Validasi Dokumentasi Baseline
 
@@ -85,8 +87,7 @@ Gate F1: **in progress**. Health registry dan control API dasar lulus; health-aw
 
 | Item | Status | Dampak | Cara membuka |
 |---|---|---|---|
-| Reload SIGHUP sing-box 1.14.3 menutup stream aktif | mitigated | In-place reload melanggar invariant active stream | Gunakan generation subprocess/listener berbeda; jangan SIGHUP saat stream aktif |
-| Health-aware picker/failover belum tersedia | open | Health state belum memengaruhi pemilihan node runtime | Integrasikan picker sebelum forwarding byte client |
+| Active probe scheduler belum tersedia | open | Health state belum diperbarui periodik tanpa traffic client | Tambahkan scheduler dengan target probe terkonfigurasi |
 | Batas koneksi aktif per node belum ditetapkan | deferred | Parameter operasi belum final | Load test F4 |
 | Target provider probe belum dipilih | deferred | Active probe F2 belum memiliki target final | Putuskan sebelum F2 |
 

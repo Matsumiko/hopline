@@ -116,3 +116,13 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 - Tiga puluh dua test lulus tanpa `ResourceWarning`.
 - Control API smoke menghasilkan status JSON tanpa credential node.
+
+### Changed
+
+- Gateway sekarang melewati node `dead`/`quarantine`, mencatat feedback passive, dan mencoba kandidat berikutnya sebelum mengirim `200 Connection Established`.
+- Retry tetap dibatasi pada fase pre-byte; relay aktif tidak diulang otomatis.
+
+### Verified
+
+- 34 test lulus tanpa `ResourceWarning`.
+- Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.
