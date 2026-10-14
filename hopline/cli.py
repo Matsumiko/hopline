@@ -114,7 +114,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         port=config.metrics_port,
         probe_enabled=bool(config.probe_targets),
     ) if config.metrics_enabled else None
-    control = ControlServer(registry)
+    control = ControlServer(registry, port=config.control_port)
     probe_scheduler = None
     probe_task = None
 

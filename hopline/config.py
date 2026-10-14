@@ -17,6 +17,7 @@ class HoplineConfig:
     gateway_host: str = "127.0.0.1"
     gateway_port: int = 18770
     tunnel_port: int = 18771
+    control_port: int = 18772
     sing_box_binary: str = "sing-box"
     engine_workdir: str = ""
     max_active_connections: int = 64
@@ -52,6 +53,7 @@ class HoplineConfig:
         gateway_host = str(section.get("gateway_host", "127.0.0.1"))
         gateway_port = int(section.get("gateway_port", 18770))
         tunnel_port = int(section.get("tunnel_port", 18771))
+        control_port = int(section.get("control_port", 18772))
         sing_box_binary = str(section.get("sing_box_binary", "sing-box"))
         engine_workdir = str(section.get("engine_workdir", ""))
         max_active_connections = int(section.get("max_active_connections", 64))
@@ -121,6 +123,8 @@ class HoplineConfig:
             raise ValueError("gateway endpoint is invalid")
         if not 1 <= tunnel_port <= 65535 or gateway_port == tunnel_port:
             raise ValueError("tunnel endpoint is invalid")
+        if not 0 <= control_port <= 65535 or control_port in {gateway_port, tunnel_port}:
+            raise ValueError("control endpoint is invalid")
         if not sing_box_binary or max_active_connections <= 0:
             raise ValueError("sing-box runtime settings are invalid")
         if probe_interval <= 0 or probe_timeout <= 0 or probe_timeout > probe_interval:
@@ -138,6 +142,7 @@ class HoplineConfig:
             gateway_host=gateway_host,
             gateway_port=gateway_port,
             tunnel_port=tunnel_port,
+            control_port=control_port,
             sing_box_binary=sing_box_binary,
             engine_workdir=engine_workdir,
             max_active_connections=max_active_connections,

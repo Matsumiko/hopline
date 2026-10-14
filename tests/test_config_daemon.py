@@ -57,7 +57,7 @@ class ConfigDaemonTests(unittest.TestCase):
             config_path = Path(directory) / "hopline.toml"
             database = Path(directory) / "registry.db"
             config_path.write_text(
-                f'[hopline]\ndatabase = "{database}"\ninterval = 60\n\n[auth]\npassword = "fixture-local-password"\n\n[[subscriptions]]\nurl = "https://example.test/sub"\n',
+                f'[hopline]\ndatabase = "{database}"\ninterval = 60\ncontrol_port = 0\n\n[auth]\npassword = "fixture-local-password"\n\n[[subscriptions]]\nurl = "https://example.test/sub"\n',
                 encoding="utf-8",
             )
             config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
@@ -87,8 +87,7 @@ class ConfigDaemonTests(unittest.TestCase):
                 database = Path(directory) / "registry.db"
                 workdir = Path(directory) / "engine"
                 config_path.write_text(
-                    f'[hopline]\ndatabase = "{database}"\ninterval = 60\n'
-                    f'gateway_port = 18779\ntunnel_port = 18979\nengine_workdir = "{workdir}"\n\n'
+                    f'[hopline]\ngateway_port = 18779\ntunnel_port = 18979\ncontrol_port = 0\nengine_workdir = "{workdir}"\n\n'
                     '[auth]\npassword = "fixture-local-password"\n\n'
                     f'[[subscriptions]]\nurl = "http://127.0.0.1:{port}/subscription"\n',
                     encoding="utf-8",
