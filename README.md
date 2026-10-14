@@ -132,6 +132,12 @@ Untuk Shadowsocks dengan `v2ray-plugin`, Hopline meneruskan opsi plugin ke sing-
 
 Hopline mendefinisikan resolver `dns-direct` untuk hostname relay/node dan satu `dns-remote-<node-id>` per node untuk query target. Setiap resolver remote memakai `8.8.8.8` dengan `detour` langsung ke outbound node yang sama. Rule DNS mencocokkan `auth_user`, sehingga query dari credential node A mengikuti outbound node A; tidak ada selector global untuk DNS target. `auth_user` dan password inbound tetap dipakai untuk routing CONNECT ke outbound node.
 
+### Health probe dan diagnostic
+
+Active health Hopline memakai HTTP/URL probe ringan melalui node yang diuji. Full download, download-only, upload-only, country, dan simple-download bukan polling health; mode tersebut memerlukan diagnostic command terpisah karena biaya traffic dan interpretasinya berbeda. Country metadata dari server test bukan bukti negara IP keluar. Detail pemetaan source NekoBox ada di [`docs/research/nekobox-testing-modes.md`](docs/research/nekobox-testing-modes.md).
+
+`node-<id>` adalah forced routing: hanya node tersebut yang dicoba dan tidak ada fallback ke kandidat lain.
+
 ## Load dan acceptance smoke
 ### Smoke egress ephemeral
 

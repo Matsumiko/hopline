@@ -80,6 +80,50 @@ class PickerFailoverTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_forced_node_does_not_fall_back_to_other_node(self) -> None:
+        async def scenario() -> None:
+            attempts: list[str] = []
+
+            async def upstream(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                try:
+                    request = await reader.readuntil(b"\r\n\r\n")
+                    token = request.split(b"Proxy-Authorization: Basic ", 1)[1].split(b"\r\n", 1)[0]
+                    attempts.append(base64.b64decode(token).decode().split(":", 1)[0])
+                    writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
+                    await writer.drain()
+                finally:
+                    writer.close()
+                    await writer.wait_closed()
+
+            server = await asyncio.start_server(upstream, "127.0.0.1", 0)
+            gateway = Gateway(
+                host="127.0.0.1",
+                port=0,
+                generation_port=server.sockets[0].getsockname()[1],
+                generation_credentials={"node-a": "a", "node-b": "b"},
+                proxy_password="local-secret",
+            )
+            await gateway.start()
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
+                token = base64.b64encode(b"node-node-a:local-secret").decode()
+                writer.write(
+                    f"CONNECT target.test:443 HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode()
+                )
+                await writer.drain()
+                response = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)
+                self.assertTrue(response.startswith(b"HTTP/1.1 502"))
+                self.assertEqual(attempts, ["node-a"])
+                writer.close()
+                await writer.wait_closed()
+            finally:
+                await gateway.stop()
+                await gateway.wait_closed()
+                server.close()
+                await server.wait_closed()
+
+        asyncio.run(scenario())
+
     def test_gateway_fails_over_before_client_200(self) -> None:
         async def scenario() -> None:
             attempts: list[str] = []

@@ -222,6 +222,14 @@ Aturan pendukung:
 - Klien menerima 200 Connection Established hanya setelah tunnel siap, jadi failover terlihat klien sebagai koneksi yang sedikit lebih lambat, bukan error.
 - Setiap hasil koneksi dilaporkan ke Scorer, sehingga pemilihan berikutnya langsung memakai data terbaru.
 
+### Kontrak health test dan diagnostic
+
+Hopline membedakan tes liveness ringan dari diagnostic berbiaya tinggi. Active health scheduler hanya memakai HTTP/URL probe melalui outbound node yang sedang diuji: CONNECT ke target, request HTTP bounded, timeout, dan status response yang diharapkan. Node healthy berarti tunnel dan request probe berhasil sesuai policy; hasil latency dicatat terpisah dari status health.
+
+Mode diagnostic seperti full download/upload, country lookup, dan simple download tidak dijalankan periodik oleh health scheduler. Mode tersebut membutuhkan traffic nyata, dependency endpoint eksternal, atau interpretasi metadata tambahan. Jika ditambahkan ke CLI, hasilnya harus dipisahkan sebagai diagnostic dan tidak boleh mengubah health node tanpa policy eksplisit.
+
+Country dari server pengujian bukan bukti negara IP keluar. Verifikasi negara harus memakai endpoint geolocation yang memang mengembalikan IP/negara dan dicatat sebagai hasil diagnostic terpisah.
+
 ## Persyaratan non-fungsional
 
 Angka berlabel usulan adalah titik awal dan divalidasi lewat load test di Fase 4.
@@ -326,7 +334,7 @@ Scope wajib: satu subscription, parser empat protokol, stable node ID, dedup, `r
 
 Gate F1:
 
-- `HTTPS_PROXY=http://rotate:x@127.0.0.1:18770` menghasilkan IP node, bukan IP VPS.
+- Dengan credential lokal `[auth]`, `HTTPS_PROXY=http://hopline:PASSWORD@127.0.0.1:18770` menghasilkan IP node, bukan IP VPS.
 - Node dapat dipaksa dengan `node-<id>`.
 - Semua node mati menghasilkan 503 cepat dan jelas.
 - Config node baru dipublish sebagai generation baru; generation lama tidak diputus sampai koneksi aktifnya nol.
@@ -336,7 +344,7 @@ Gate F1:
 
 ### Fase 2 — Health dan failover
 
-Output: active/passive health, state machine, cooldown, pre-forward failover, dan 503 saat pool kosong.
+Output: active/passive health, state machine, cooldown, pre-forward failover, dan 503 saat pool kosong. Active health memakai HTTP/URL probe ringan per node. Full/download/upload/country/simple-download adalah diagnostic on-demand dan bukan polling health default.
 
 Gate F2: kegagalan sebelum byte client diteruskan dapat berpindah kandidat; tidak ada retry setelah byte diteruskan; node mati dieject instan; stream panjang tidak dibuffer.
 
