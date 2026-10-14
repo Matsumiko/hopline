@@ -6,6 +6,7 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 ### Added
 - Gateway sekarang mewajibkan credential lokal `[auth]` sebelum memilih node. Username client (`hopline` secara default) dan password lokal tidak diteruskan ke sing-box; credential node tetap internal. Smoke ephemeral memverifikasi credential benar, salah, dan kosong.
+- Memperbaiki health lifecycle production: daemon sekarang mengaktifkan URL probe ketika `[health].targets` dikonfigurasi, dan scheduler memakai bounded concurrency default 10. Node baru tidak lagi tertahan sebagai `unknown`; production pass menurunkan unknown dari 1.031 menjadi 3 dari 1.535 node.
 - Memperbaiki dispatch `hopline run` agar systemd daemon tidak masuk restart loop; menambahkan fallback geolocation `ipwho.is` setelah provider utama gagal.
 - Production subscription rollout menambahkan empat source subscription ([REDACTED_PROVIDER], CN, FI, KR) ke config private; sync menghasilkan 1,035 node. Geo/country routing masih blocked karena node production yang tersedia belum berhasil menyediakan exit-IP.
 - `control_port` sekarang configurable dengan default production tetap `18772`; daemon tests memakai port ephemeral `0` sehingga tidak bentrok dengan service production yang sedang berjalan.

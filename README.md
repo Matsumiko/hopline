@@ -130,7 +130,7 @@ GET /nodes
 Health state dasar: `healthy`, `degraded`, `dead`, dan `quarantine`. Response hanya memuat node ID, protocol, host, port, nama, state, counters, dan latency; credential tidak pernah dikembalikan.
 Gateway memilih node `healthy` atau `degraded` yang tidak sedang cooldown; node `dead` dan `quarantine` dilewati. Kegagalan pertama memberi cooldown 30 detik. Tiga kegagalan berturut-turut memindahkan node ke `dead`; active probe mencoba ulang dengan backoff 1, 2, 5, 15, lalu 60 menit. Satu sukses memulihkan node ke `degraded`, dan tiga sukses berturut-turut memulihkannya ke `healthy`.
 Jika CONNECT valid tetapi tidak ada kandidat yang tersedia, gateway mengembalikan `503 Service Unavailable` dengan cepat. Jika CONNECT ke kandidat gagal sebelum respons `200`, gateway mencoba kandidat berikutnya. Hopline baru mengirim `200 Connection Established` setelah upstream berhasil, sehingga retry tidak terjadi setelah byte client diteruskan.
-Active probe opsional dikonfigurasi tanpa credential:
+Active probe opsional dikonfigurasi tanpa credential. Target wajib diisi agar node baru tidak tetap `unknown`; scheduler menjalankan probe melalui bounded queue dengan concurrency default 10:
 
 ```toml
 [health]
@@ -138,6 +138,7 @@ mode = "http"
 targets = ["https://provider.example/health"]
 interval = 300
 timeout = 5
+concurrency = 10
 proxy_host = "127.0.0.1"
 proxy_port = 18771
 ```

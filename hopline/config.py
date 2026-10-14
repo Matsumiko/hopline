@@ -23,6 +23,7 @@ class HoplineConfig:
     engine_workdir: str = ""
     max_active_connections: int = 64
     probe_targets: tuple[str, ...] = ()
+    probe_concurrency: int = 10
     probe_interval: float = 5 * 60
     probe_timeout: float = 5
     probe_mode: str = "tcp"
@@ -101,6 +102,7 @@ class HoplineConfig:
             targets.append(target)
         probe_interval = float(health.get("interval", 5 * 60))
         probe_timeout = float(health.get("timeout", 5))
+        probe_concurrency = int(health.get("concurrency", 10))
         probe_mode = str(health.get("mode", "tcp"))
         if probe_mode not in {"tcp", "http"}:
             raise ValueError("health.mode must be tcp or http")
@@ -131,8 +133,8 @@ class HoplineConfig:
             raise ValueError("country_max_age must be positive")
         if not sing_box_binary or max_active_connections <= 0:
             raise ValueError("sing-box runtime settings are invalid")
-        if probe_interval <= 0 or probe_timeout <= 0 or probe_timeout > probe_interval:
-            raise ValueError("health probe interval and timeout are invalid")
+        if probe_interval <= 0 or probe_timeout <= 0 or probe_timeout > probe_interval or probe_concurrency <= 0:
+            raise ValueError("health probe interval, timeout, and concurrency are invalid")
         if not probe_proxy_host or not 1 <= probe_proxy_port <= 65535:
             raise ValueError("health proxy endpoint is invalid")
         if metrics_host not in {"127.0.0.1", "::1", "localhost"} or not 1 <= metrics_port <= 65535:
@@ -154,6 +156,7 @@ class HoplineConfig:
             probe_targets=tuple(targets),
             probe_interval=probe_interval,
             probe_timeout=probe_timeout,
+            probe_concurrency=probe_concurrency,
             probe_mode=probe_mode,
             probe_proxy_host=probe_proxy_host,
             probe_proxy_port=probe_proxy_port,

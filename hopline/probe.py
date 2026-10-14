@@ -94,10 +94,11 @@ class ActiveProbeScheduler:
         *,
         interval: float = 5 * 60,
         timeout: float = 5,
+        concurrency: int = 10,
         probe: TargetProbe = tcp_target_probe,
     ) -> None:
-        if interval <= 0 or timeout <= 0 or timeout > interval:
-            raise ValueError("probe interval and timeout are invalid")
+        if interval <= 0 or timeout <= 0 or timeout > interval or concurrency <= 0:
+            raise ValueError("probe interval, timeout, and concurrency are invalid")
         self.checker = checker
         self.nodes = nodes
         self.targets = tuple(ProbeTarget(target) for target in targets)
@@ -105,31 +106,35 @@ class ActiveProbeScheduler:
             raise ValueError("at least one probe target is required")
         self.interval = interval
         self.timeout = timeout
+        self.concurrency = concurrency
         self.probe = probe
         self._stop = asyncio.Event()
 
+    async def _probe_one(self, index: int, node: Node) -> HealthRecord | None:
+        if not self.checker.should_probe(node.id):
+            return None
+        target = self.targets[index % len(self.targets)]
+        started = time.monotonic()
+        try:
+            result = self.probe(node, target)
+            ok = await asyncio.wait_for(result, self.timeout) if inspect.isawaitable(result) else bool(result)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            return self.checker.record_failure(node.id, type(error).__name__)
+        latency_ms = (time.monotonic() - started) * 1000
+        return self.checker.record_success(node.id, latency_ms) if ok else self.checker.record_failure(node.id, "probe returned false")
+
     async def probe_once(self) -> list[HealthRecord]:
-        records: list[HealthRecord] = []
-        for index, node in enumerate(tuple(self.nodes())):
-            if not self.checker.should_probe(node.id):
-                continue
-            target = self.targets[index % len(self.targets)]
-            started = time.monotonic()
-            try:
-                result = self.probe(node, target)
-                ok = await asyncio.wait_for(result, self.timeout) if inspect.isawaitable(result) else bool(result)
-            except asyncio.CancelledError:
-                raise
-            except Exception as error:
-                records.append(self.checker.record_failure(node.id, type(error).__name__))
-                continue
-            latency_ms = (time.monotonic() - started) * 1000
-            records.append(
-                self.checker.record_success(node.id, latency_ms)
-                if ok
-                else self.checker.record_failure(node.id, "probe returned false")
-            )
-        return records
+        nodes = tuple(self.nodes())
+        semaphore = asyncio.Semaphore(self.concurrency)
+
+        async def queued(index: int, node: Node) -> HealthRecord | None:
+            async with semaphore:
+                return await self._probe_one(index, node)
+
+        results = await asyncio.gather(*(queued(index, node) for index, node in enumerate(nodes)))
+        return [record for record in results if record is not None]
 
     async def run(self) -> None:
         while not self._stop.is_set():

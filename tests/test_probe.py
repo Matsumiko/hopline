@@ -73,6 +73,34 @@ class ProbeTests(unittest.TestCase):
             registry.close()
 
         asyncio.run(scenario())
+    def test_probe_queue_limits_concurrency_and_records_new_nodes(self) -> None:
+        async def scenario() -> None:
+            registry = SQLiteRegistry(":memory:")
+            nodes = [Node(str(index), "vless", "edge.test", 443, f"secret-{index}") for index in range(8)]
+            registry.replace_subscription("fixture", "hash", nodes)
+            active = 0
+            maximum = 0
+
+            async def probe(_node: Node, _target: ProbeTarget) -> bool:
+                nonlocal active, maximum
+                active += 1
+                maximum = max(maximum, active)
+                await asyncio.sleep(0.01)
+                active -= 1
+                return True
+
+            scheduler = ActiveProbeScheduler(
+                HealthChecker(registry), registry.list_nodes, ["https://provider.test/health"],
+                interval=10, timeout=1, concurrency=3, probe=probe,
+            )
+            records = await scheduler.probe_once()
+            self.assertEqual(len(records), len(nodes))
+            self.assertEqual(maximum, 3)
+            self.assertEqual(len(registry.list_health()), len(nodes))
+            self.assertTrue(all(record.state == HealthState.HEALTHY for record in records))
+            registry.close()
+
+        asyncio.run(scenario())
 
     def test_probe_run_stops_cleanly(self) -> None:
         async def scenario() -> None:

@@ -220,6 +220,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
                 config.probe_targets,
                 interval=config.probe_interval,
                 timeout=config.probe_timeout,
+                concurrency=config.probe_concurrency,
                 **({"probe": probe} if probe is not None else {}),
             )
             probe_task = asyncio.create_task(probe_scheduler.run())
