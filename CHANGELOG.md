@@ -147,4 +147,14 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 - 16 concurrent CONNECT dengan limit 4 menghasilkan 4 accepted dan 12 rejected.
 - HTTPS proxy acceptance merelay payload `pong` end-to-end.
+
+### Changed
+
+- Active probe mendukung mode `http`: CONNECT ke mixed inbound sing-box, GET ke target, dan validasi status `2xx`–`3xx`.
+- Config mendukung `proxy_host` dan `proxy_port` untuk probe tunnel.
+
+### Verified
+
+- 41 test lulus tanpa `ResourceWarning`.
+- HTTP probe berhasil dengan auth node, menolak CONNECT non-200, dan memvalidasi response target.
 - Regression smoke membuktikan node pertama ditolak, node kedua berhasil, dan client hanya menerima satu respons `200`.

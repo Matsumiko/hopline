@@ -17,6 +17,9 @@ class HoplineConfig:
     probe_targets: tuple[str, ...] = ()
     probe_interval: float = 5 * 60
     probe_timeout: float = 5
+    probe_mode: str = "tcp"
+    probe_proxy_host: str = "127.0.0.1"
+    probe_proxy_port: int = 18771
 
     @classmethod
     def from_file(cls, path: str | Path) -> "HoplineConfig":
@@ -67,10 +70,15 @@ class HoplineConfig:
             targets.append(target)
         probe_interval = float(health.get("interval", 5 * 60))
         probe_timeout = float(health.get("timeout", 5))
+        probe_mode = str(health.get("mode", "tcp"))
+        if probe_mode not in {"tcp", "http"}:
+            raise ValueError("health.mode must be tcp or http")
+        probe_proxy_host = str(health.get("proxy_host", "127.0.0.1"))
+        probe_proxy_port = int(health.get("proxy_port", 18771))
+        if not probe_proxy_host or not 1 <= probe_proxy_port <= 65535:
+            raise ValueError("health proxy endpoint is invalid")
         if interval <= 0 or jitter < 0 or jitter >= interval:
             raise ValueError("interval and jitter are invalid")
-        if probe_interval <= 0 or probe_timeout <= 0 or probe_timeout > probe_interval:
-            raise ValueError("health probe interval and timeout are invalid")
         return cls(
             database=database,
             subscriptions=tuple(urls),
@@ -79,6 +87,9 @@ class HoplineConfig:
             probe_targets=tuple(targets),
             probe_interval=probe_interval,
             probe_timeout=probe_timeout,
+            probe_mode=probe_mode,
+            probe_proxy_host=probe_proxy_host,
+            probe_proxy_port=probe_proxy_port,
         )
 
     @classmethod

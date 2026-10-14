@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import inspect
+import ssl
 import time
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
@@ -16,14 +18,62 @@ class ProbeTarget:
     url: str
 
     @property
+    def parsed(self):
+        parsed = urlsplit(self.url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("probe target must be an HTTP(S) URL")
+        return parsed
+
+    @property
     def hostname(self) -> str:
-        hostname = urlsplit(self.url).hostname
-        if not hostname:
-            raise ValueError("probe target must contain a hostname")
-        return hostname
+        return self.parsed.hostname or ""
+
+    @property
+    def port(self) -> int:
+        return self.parsed.port or (443 if self.parsed.scheme == "https" else 80)
+
+    @property
+    def path(self) -> str:
+        parsed = self.parsed
+        return parsed.path or "/"
 
 
 TargetProbe = Callable[[Node, ProbeTarget], bool | Awaitable[bool]]
+
+
+async def http_connect_probe(
+    node: Node,
+    target: ProbeTarget,
+    *,
+    proxy_host: str = "127.0.0.1",
+    proxy_port: int = 18771,
+) -> bool:
+    """Probe a target through the sing-box mixed inbound using this node's auth user."""
+    reader, writer = await asyncio.open_connection(proxy_host, proxy_port)
+    try:
+        token = base64.b64encode(f"{node.id}:{node.credential}".encode()).decode()
+        writer.write(
+            f"CONNECT {target.hostname}:{target.port} HTTP/1.1\r\n"
+            f"Host: {target.hostname}:{target.port}\r\n"
+            f"Proxy-Authorization: Basic {token}\r\n\r\n".encode()
+        )
+        await writer.drain()
+        response = await reader.readuntil(b"\r\n\r\n")
+        if not response.startswith(b"HTTP/1.1 200"):
+            return False
+        if target.parsed.scheme == "https":
+            context = ssl.create_default_context()
+            await writer.start_tls(context, server_hostname=target.hostname)
+        writer.write(
+            f"GET {target.path} HTTP/1.1\r\nHost: {target.hostname}\r\nConnection: close\r\n\r\n".encode()
+        )
+        await writer.drain()
+        status_line = await reader.readline()
+        parts = status_line.split(b" ", 2)
+        return len(parts) >= 2 and parts[1].isdigit() and 200 <= int(parts[1]) < 400
+    finally:
+        writer.close()
+        await writer.wait_closed()
 
 
 async def tcp_target_probe(node: Node, target: ProbeTarget) -> bool:

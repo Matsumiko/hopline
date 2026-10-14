@@ -4,8 +4,8 @@
 
 - **Status:** `in progress`
 - **Fase aktif:** Fase 1 — Vertical slice MVP
-- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, per-node active connection limit, load/acceptance harness, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; provider-specific probe semantics belum selesai.
-- **Last verified:** 39 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, control API smoke, pre-byte failover regression, active probe cancellation, load gate, dan HTTPS proxy acceptance lulus tanpa credential live.
+- **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, systemd unit, health registry, dan localhost control API tersedia; host installation review belum selesai.
+- **Last verified:** 41 test F1, live subscription sync 100 node, config check, CLI contract, daemon once, systemd verify, control API smoke, pre-byte failover regression, active probe cancellation, HTTP probe response validation, load gate, dan HTTPS proxy acceptance lulus tanpa credential live.
 
 ## Selesai
 
@@ -26,13 +26,12 @@
 
 ## Sedang Dikerjakan
 
-- Melanjutkan Fase 1 dengan provider-specific probe semantics dan host installation review.
+- Melanjutkan Fase 1 dengan host installation review dan optional Prometheus metrics.
 
 ## Berikutnya
 
-1. Putuskan target provider probe dan semantics HTTP melalui node.
-2. Review systemd install/runbook pada service host.
-3. Pertimbangkan Prometheus metrics setelah acceptance baseline stabil.
+1. Review systemd install/runbook pada service host.
+2. Pertimbangkan Prometheus metrics setelah acceptance baseline stabil.
 
 ## Bukti
 
@@ -74,8 +73,7 @@ Load smoke: `concurrency=16`, `limit=4`, `admitted=4`, `rejected=12`.
 
 HTTPS proxy acceptance: CONNECT gateway → upstream proxy → local origin, payload `pong` kembali end-to-end.
 
-Gate F1: **in progress**. Runtime, health-aware failover, active probes, connection boundary, dan local HTTPS proxy path lulus; provider-specific probe semantics dan host installation review belum selesai.
-
+Gate F1: **in progress**. Runtime, health-aware failover, active probes TCP/HTTP-over-CONNECT, connection boundary, dan local HTTPS proxy path lulus; host installation review belum selesai.
 ## Validasi Dokumentasi Baseline
 
 - Seluruh file yang dirujuk PRD dan README tersedia.

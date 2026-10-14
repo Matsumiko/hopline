@@ -101,13 +101,22 @@ async def _run_daemon(config_path: str, once: bool) -> int:
 
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
-    scheduler = SubscriptionScheduler(Syncer(registry), config.subscriptions, interval=config.interval, jitter=config.jitter)
+    scheduler = SubscriptionScheduler(
+        Syncer(registry), config.subscriptions,
+        interval=config.interval, jitter=config.jitter,
+    )
     probe_scheduler = None
     probe_task = None
     if config.probe_targets:
+        probe = None
+        if config.probe_mode == "http":
+            from functools import partial
+            from .probe import http_connect_probe
+            probe = partial(http_connect_probe, proxy_host=config.probe_proxy_host, proxy_port=config.probe_proxy_port)
         probe_scheduler = ActiveProbeScheduler(
             HealthChecker(registry), registry.list_nodes, config.probe_targets,
             interval=config.probe_interval, timeout=config.probe_timeout,
+            **({"probe": probe} if probe is not None else {}),
         )
         probe_task = asyncio.create_task(probe_scheduler.run())
     control = ControlServer(registry)

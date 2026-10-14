@@ -95,12 +95,15 @@ Active probe opsional dikonfigurasi tanpa credential:
 
 ```toml
 [health]
+mode = "http"
 targets = ["https://provider.example/health"]
 interval = 300
 timeout = 5
+proxy_host = "127.0.0.1"
+proxy_port = 18771
 ```
 
-Daemon menjalankan probe berkala terhadap endpoint node dan menyimpan hasilnya di health registry. `targets` adalah target kebijakan yang tervalidasi dan tidak boleh berisi username, password, atau fragment. Probe tidak mencetak URL atau credential ke output.
+Mode `http` membuka CONNECT ke mixed inbound sing-box dengan auth user node, lalu meminta target melalui tunnel dan menerima status HTTP `2xx`–`3xx` sebagai sehat. Mode `tcp` tetap tersedia sebagai default. Service systemd hanya perlu akses jaringan keluar dan membaca config private; port control tetap localhost.
 
 ## Load dan acceptance smoke
 
