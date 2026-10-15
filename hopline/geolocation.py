@@ -125,6 +125,22 @@ def default_providers() -> tuple[GeoProvider, ...]:
             lambda ip: "https://ipwho.is/" + urllib.parse.quote(ip, safe=""),
             _parse_ipwho,
         ),
+        GeoProvider(
+            "reallyfreegeoip",
+            lambda ip: "https://reallyfreegeoip.org/json/" + urllib.parse.quote(ip, safe=""),
+            _parse_reallyfreegeoip,
+        ),
+    )
+def _parse_reallyfreegeoip(payload: dict) -> tuple[str, str, str | None, str | None, str | None]:
+    if payload.get("error") is True:
+        raise GeoLookupError("reallyfreegeoip response is unsuccessful")
+    _require_ip(payload.get("ip"))
+    return (
+        payload["ip"],
+        _require_code(payload.get("country_code")),
+        payload.get("country_name"),
+        payload.get("as_number"),
+        payload.get("isp"),
     )
 
 

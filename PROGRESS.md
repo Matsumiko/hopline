@@ -131,6 +131,8 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Collector `hopline geo --all` ditambahkan untuk refresh metadata country secara eksplisit dan terbatas; tidak dijalankan pada setiap `/status`.
 - Deploy collector CLI ke production menggunakan backup `/var/backups/hopline/geo-collector-20261015T074839Z`. Batch terbatas `--limit 3 --concurrency 1` memproses 3 node: 2 berhasil, 1 gagal karena `GeoLookupError`; metadata tersimpan menghasilkan country `JP: 1`, `RU: 1`, `US: 1`. `/status` live menampilkan ketiganya dan invariant country/global health lulus.
 - Full suite setelah collector country: `97 tests — OK`.
+- Geolocation fallback `reallyfreegeoip` ditambahkan dan diuji dengan fixture; smoke langsung endpoint publik `https://reallyfreegeoip.org/json/8.8.8.8` mengembalikan HTTP `403`, sehingga provider diperlakukan sebagai fallback dan bukan dijamin unlimited.
+- Registry production setelah subscription refresh berisi `1.850` node tetapi `0` row geolocation. Metadata country terikat `node_id` dan dapat hilang ketika node diganti/retired; `/status` dengan benar menempatkan node tanpa metadata ke `unknown`.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |

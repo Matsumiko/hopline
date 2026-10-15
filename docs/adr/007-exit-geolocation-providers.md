@@ -15,10 +15,12 @@ Hopline menyediakan adapter geolocation dengan fallback berurutan:
 1. `https://checkip.com/api/v1/ip?ip={ip}`
 2. `https://ip.cc/webapi/product/api-ip-address?language=en&ip={ip}`
 3. `https://cekipsaya.com/api/?action=lookup&target={ip}` dengan `Referer` yang sesuai
+4. `https://ipwho.is/{ip}`
+5. `https://reallyfreegeoip.org/json/{ip}`
 
 Response harus mengembalikan IP yang sama dengan IP input dan country code ISO-3166 alpha-2. `cekipsaya` memakai field `country` seperti `Poland (PL)`; `resolved=false` tidak menggagalkan hasil jika IP dan country tersedia.
 
-Hasil disimpan di tabel `geolocation`, terpisah dari health, dengan IP, country, ASN, organisasi, provider, dan timestamp. Credential node, URL subscription, dan secret tidak disimpan di hasil diagnostic atau error fallback. Command `hopline geo --config <file> --node <id> --json` memperoleh IP melalui HTTPS self-IP request yang melewati Gateway dengan username `node-<id>` dan password lokal Hopline.
+Hasil disimpan di tabel `geolocation`, terpisah dari health, dengan IP, country, ASN, organisasi, provider, dan timestamp. Credential node, URL subscription, dan secret tidak disimpan di hasil diagnostic atau error fallback. Command `hopline geo --config <file> --node <id>` memperoleh IP melalui HTTPS self-IP request yang melewati Gateway dengan username `node-<id>` dan password lokal Hopline.
 
 ## Consequences
 

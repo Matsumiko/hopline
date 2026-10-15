@@ -63,20 +63,21 @@ class GeolocationTests(unittest.TestCase):
         self.assertIn("action=lookup", calls[-1][0])
         self.assertIn("target=104.28.156.33", calls[-1][0])
 
-    def test_falls_back_to_ipwho_after_other_providers_fail(self) -> None:
+    def test_falls_back_to_reallyfreegeoip(self) -> None:
         def fetch(url: str, _headers: tuple[tuple[str, str], ...]) -> dict:
-            if "ipwho.is" not in url:
+            if "reallyfreegeoip.org" not in url:
                 raise OSError("provider unavailable")
+            self.assertIn("/json/104.28.156.33", url)
             return {
-                "success": True,
                 "ip": IP,
-                "country_code": "DE",
-                "country": "Germany",
-                "connection": {"asn": 3320, "org": "Example ISP"},
+                "country_code": "US",
+                "country_name": "United States",
+                "as_number": "AS13335",
+                "isp": "Example ISP",
             }
 
         result = GeolocationResolver(fetch=fetch).resolve(IP)
-        self.assertEqual((result.provider, result.country_code, result.country), ("ipwho", "DE", "Germany"))
+        self.assertEqual((result.provider, result.country_code, result.country), ("reallyfreegeoip", "US", "United States"))
 
     def test_fetch_exit_ip_uses_node_route_credentials(self) -> None:
         captured: list[tuple[str, str, float]] = []
