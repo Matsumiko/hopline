@@ -8,24 +8,16 @@
 
 Status country hanya dapat menampilkan `ID`, `US`, `RU`, dan country lain jika metadata geolocation node sudah tersimpan. Metadata harus berasal dari exit IP aktual yang diperoleh melalui route node tersebut. Nama node, hostname relay, lokasi VPS, atau provider subscription tidak cukup untuk menentukan country exit.
 
-## Decision
-
-Hopline menyediakan refresh country eksplisit melalui:
+Hopline menyediakan refresh country eksplisit dan otomatis melalui batch collector. Manual:
 
 ```text
 hopline geo --config <file> --node <node-id> --json
 hopline geo --config <file> --all --concurrency 2 --json
 ```
 
-Mode `--all`:
+Daemon juga menjalankan collector background setelah Gateway aktif, dengan default interval 900 detik, limit 10 node per siklus, dan concurrency 1. Cache `country_max_age` mencegah lookup metadata fresh.
 
-- memilih node tanpa metadata country fresh;
-- melewati node `dead` dan `quarantine`;
-- membatasi concurrency dengan semaphore;
-- mengambil exit IP melalui Gateway memakai route `node-<id>`;
-- menjalankan resolver geolocation fallback;
-- menyimpan hanya IP, country, ASN, provider, dan timestamp;
-- mengeluarkan ringkasan updated, failed, skipped, error class, dan country counts.
+Mode batch memilih node tanpa metadata country fresh, melewati node `dead` dan `quarantine`, mengambil exit IP melalui Gateway memakai route `node-<id>`, menjalankan resolver geolocation fallback, dan menyimpan hanya metadata non-secret.
 
 Refresh tidak dijalankan pada setiap request `/status`, karena 1.849 node berarti ribuan koneksi proxy dan lookup provider. `/status` hanya membaca cache metadata yang sudah tersimpan.
 
@@ -44,7 +36,6 @@ Refresh tidak dijalankan pada setiap request `/status`, karena 1.849 node berart
 - Menggunakan lokasi server health probe: lokasi target probe bukan lokasi exit node.
 
 ## Confirmation
-
-- Regression test memverifikasi node fresh/dead dilewati dan node missing diproses.
-- Full suite setelah collector: `97 tests — OK`.
-- Production smoke satu node menghasilkan country `RU` melalui exit IP aktual.
+- Regression test memverifikasi node fresh/dead dilewati, node missing diproses, dan background task dibatalkan bersih saat shutdown.
+- Full suite setelah auto-refresh: `98 tests — OK`.
+- Production smoke sebelumnya menghasilkan country `RU`, `JP`, dan `US` melalui exit IP aktual.

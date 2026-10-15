@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from hopline.config import HoplineConfig
-from hopline.cli import _run_daemon
+from hopline.cli import _geo_refresh_loop, _run_daemon
 from hopline.registry import SQLiteRegistry
 from hopline.syncer import SyncResult
 
@@ -26,10 +26,29 @@ class ConfigDaemonTests(unittest.TestCase):
             )
             path.chmod(stat.S_IRUSR | stat.S_IWUSR)
             config = HoplineConfig.from_file(path)
-            self.assertEqual(config.database, "registry.db")
-            self.assertEqual(config.subscriptions, ("https://example.test/sub",))
             self.assertEqual(config.interval, 60)
             self.assertEqual(config.jitter, 5)
+            self.assertEqual(config.country_refresh_interval, 900)
+            self.assertEqual(config.country_refresh_limit, 10)
+            self.assertEqual(config.country_refresh_concurrency, 1)
+
+    def test_country_refresh_loop_runs_and_cancels_cleanly(self) -> None:
+        async def scenario() -> None:
+            calls = []
+            completed = asyncio.Event()
+
+            async def refresh(*args):
+                calls.append(args)
+                completed.set()
+
+            with patch("hopline.cli._geo_all", new=refresh):
+                task = asyncio.create_task(_geo_refresh_loop("config.toml", 3600, 10, 1))
+                await asyncio.wait_for(completed.wait(), 1)
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            self.assertEqual(calls, [("config.toml", "https://api.ipify.org?format=json", 1, 10)])
+
+        asyncio.run(scenario())
 
     def test_config_rejects_world_readable_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

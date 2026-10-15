@@ -133,13 +133,16 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Full suite setelah collector country: `97 tests — OK`.
 - Geolocation fallback `reallyfreegeoip` ditambahkan dan diuji dengan fixture; smoke langsung endpoint publik `https://reallyfreegeoip.org/json/8.8.8.8` mengembalikan HTTP `403`, sehingga provider diperlakukan sebagai fallback dan bukan dijamin unlimited.
 - Registry production setelah subscription refresh berisi `1.850` node tetapi `0` row geolocation. Metadata country terikat `node_id` dan dapat hilang ketika node diganti/retired; `/status` dengan benar menempatkan node tanpa metadata ke `unknown`.
+- Auto-refresh country ditambahkan ke lifecycle daemon: default interval 900 detik, limit 10 node per siklus, concurrency 1, dan task dibatalkan saat shutdown. Full suite setelah perubahan: `98 tests — OK`.
+- Auto-refresh production diverifikasi tanpa menjalankan CLI `geo`: setelah restart service, background collector mengisi metadata country. `/status` live menampilkan `GB: 1`, `US: 1`, dan `unknown: 1845` dari total `1847`; invariant country/global health lulus.
+- Deploy auto-refresh menggunakan backup `/var/backups/hopline/country-auto-refresh-20261015T092329Z`; service active.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |
 |---|---|---|---|
 | VMess production pool kecil dan lambat | open | Source VMess tambahan memiliki 16 node dan seluruhnya lulus forced-route HTTP 200; total VMess registry 25 karena gabungan source lain. Latency source baru 985–1944 ms | Ulangi acceptance setelah refresh berikutnya dan pantau node yang berubah/hilang |
-| Country production belum terisi penuh | in progress | Batch collector sudah mengisi JP, RU, dan US; node lain tetap `unknown`, dan satu dari tiga route pada batch pertama gagal di resolver | Jalankan batch `hopline geo --all --limit N --concurrency 1..2` secara bertahap dan pantau rate limit/provider failure |
-| Provider geolocation gratis memiliki rate limit dan perubahan response | open | Batch pertama menghasilkan 2 sukses dan 1 `GeoLookupError`; fallback resolver tetap dipakai | Jalankan refresh bertahap dengan limit/concurrency kecil; jangan lookup pada `/status` |
+| Country production belum terisi penuh | in progress | Auto-refresh sudah aktif dan menghasilkan GB/US; mayoritas node masih `unknown` karena batch limit 10 dan route/provider dapat gagal | Biarkan daemon mengisi batch berkala; pantau provider failure dan metadata stale |
+| Provider geolocation gratis memiliki rate limit dan perubahan response | open | Auto-refresh memakai limit 10/concurrency 1 dan fallback chain; provider `reallyfreegeoip` mengembalikan HTTP 403 saat direct smoke | Pertahankan batch kecil dan jangan lookup pada `/status` |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
 
 

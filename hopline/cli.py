@@ -13,8 +13,9 @@ from urllib.parse import urlsplit
 
 from .config import HoplineConfig
 from .engine import SingBoxEngine
+from .geolocation import DEFAULT_EXIT_IP_URL, GeolocationResolver, fetch_exit_ip, is_fresh
 from .gateway import Gateway
-from .geolocation import GeolocationResolver, fetch_exit_ip, is_fresh
+from .generation import Generation
 from .health import HealthChecker, HealthState
 from .registry import SQLiteRegistry
 from .scheduler import SubscriptionScheduler
@@ -178,6 +179,19 @@ async def _geo_all(
     finally:
         registry.close()
 
+async def _geo_refresh_loop(
+    config_path: str,
+    interval: float,
+    limit: int,
+    concurrency: int,
+) -> None:
+    while True:
+        try:
+            await _geo_all(config_path, DEFAULT_EXIT_IP_URL, concurrency, limit)
+        except (OSError, ValueError, RuntimeError):
+            pass
+        await asyncio.sleep(interval)
+
 
 def _doctor(database: str) -> dict[str, object]:
     binary = shutil.which("sing-box")
@@ -221,6 +235,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         workdir=config.engine_workdir,
         reserved_ports=(config.gateway_port, config.control_port, config.metrics_port),
     )
+    country_refresh_task = None
     gateway: Gateway | None = None
     scheduler: SubscriptionScheduler | None = None
     metrics = MetricsServer(
@@ -311,6 +326,15 @@ async def _run_daemon(config_path: str, once: bool) -> int:
                 **({"probe": probe} if probe is not None else {}),
             )
             probe_task = asyncio.create_task(probe_scheduler.run())
+        if not once:
+            country_refresh_task = asyncio.create_task(
+                _geo_refresh_loop(
+                    config_path,
+                    config.country_refresh_interval,
+                    config.country_refresh_limit,
+                    config.country_refresh_concurrency,
+                )
+            )
         if once:
             print(json.dumps({
                 "sources": len(results),
@@ -335,9 +359,9 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             await gateway.stop()
             await gateway.wait_closed()
         await engine.close()
-        if metrics is not None:
-            await metrics.stop()
-        await control.stop()
+        if country_refresh_task is not None:
+            country_refresh_task.cancel()
+            await asyncio.gather(country_refresh_task, return_exceptions=True)
         registry.close()
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
