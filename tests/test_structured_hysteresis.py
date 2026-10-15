@@ -6,7 +6,7 @@ from hopline.syncer import Syncer
 
 
 VLESS = "vless://00000000-0000-4000-8000-000000000021@a.example.test:443?security=tls&sni=a.example.test&type=ws&path=%2Fa#A"
-
+VLESS_B = "vless://00000000-0000-4000-8000-000000000022@b.example.test:443?security=tls&sni=b.example.test&type=ws&path=%2Fb#B"
 
 class StructuredHysteresisTests(unittest.TestCase):
     def test_singbox_json_outbounds_are_parsed(self) -> None:
@@ -34,6 +34,19 @@ class StructuredHysteresisTests(unittest.TestCase):
         self.assertEqual(result.parsed_nodes, 1)
         self.assertEqual(result.invalid_entries, 0)
 
+    def test_retiring_source_removes_orphans_but_keeps_shared_nodes(self) -> None:
+        registry = SQLiteRegistry(":memory:")
+        node_a = Syncer(registry).sync_text("old", VLESS.encode())
+        self.assertTrue(node_a.changed)
+        syncer = Syncer(registry)
+        syncer.sync_text("old", f"{VLESS}\n{VLESS_B}".encode())
+        syncer.sync_text("current", VLESS.encode())
+
+        registry.reconcile_subscription_sources(("current",))
+
+        self.assertIsNone(registry.subscription_metadata("old"))
+        self.assertIsNotNone(registry.subscription_metadata("current"))
+        self.assertEqual([node.server for node in registry.list_nodes()], ["a.example.test"])
     def test_node_is_removed_after_three_missing_snapshots(self) -> None:
         registry = SQLiteRegistry(":memory:")
         syncer = Syncer(registry)

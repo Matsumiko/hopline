@@ -84,6 +84,7 @@ url = "https://example.invalid/subscription"
 ```
 
 `[auth]` wajib berisi username dan password lokal. Simpan file TOML dengan permission `0600`. Credential node/provider tetap berada internal Hopline dan tidak pernah menjadi credential client. `control_port` default `18772` untuk service production dan dapat diatur ke `0` pada test agar OS memilih port ephemeral. CLI `status` dan `nodes` tetap memakai `18772` secara default; gunakan `--port` jika daemon memakai port lain.
+Refresh subscription berjalan mengikuti `interval` dan `jitter`. Setiap source menyimpan snapshot valid terakhir, memakai ETag/Last-Modified bila tersedia, dan mempertahankan node lama saat fetch atau parse gagal. Node mendapat ID stabil dari parameter koneksi; node baru ditambahkan, node identik lintas source dideduplikasi, dan node yang hilang dari satu snapshot baru dilepas setelah tiga sync valid berturut-turut. Jika URL dihapus dari konfigurasi, source tersebut direkonsiliasi setelah satu siklus sync lengkap: snapshot dan node yang hanya dimiliki source itu dihapus, sedangkan node yang masih dimiliki source aktif tetap dipertahankan. Siklus yang terhenti sebelum semua source dicoba tidak melakukan retirement.
 Untuk affinity per sesi, gunakan username proxy `sticky-<sessionId>`, misalnya `sticky-job-42`. Binding hanya hidup di proses Gateway dan hilang saat restart; TTL diperpanjang ketika koneksi berhasil dipakai. `node-<id>` tetap forced tanpa fallback, sedangkan `rotate` tetap memilih ulang per koneksi.
 Routing country memakai username:
 

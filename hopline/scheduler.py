@@ -36,8 +36,10 @@ class SubscriptionScheduler:
 
     async def sync_once(self) -> list[SyncResult]:
         results: list[SyncResult] = []
+        completed = True
         for source in self.sources:
             if self._stop.is_set():
+                completed = False
                 break
             if self.engine is None:
                 results.append(await self.syncer.sync_url(source))
@@ -48,6 +50,7 @@ class SubscriptionScheduler:
                 results.append(result)
         for link in self.static_nodes:
             if self._stop.is_set():
+                completed = False
                 break
             if self.engine is None:
                 results.append(self.syncer.sync_static(link))
@@ -56,6 +59,9 @@ class SubscriptionScheduler:
                 if self.on_generation is not None:
                     self.on_generation(generation)
                 results.append(result)
+        registry = getattr(self.syncer, "registry", None)
+        if completed and registry is not None:
+            registry.reconcile_subscription_sources(self.sources)
         return results
 
     async def run(self, *, initial_sync: bool = True) -> None:

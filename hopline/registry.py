@@ -337,6 +337,21 @@ class SQLiteRegistry:
             )
         return before != self.snapshot_ids()
 
+    def reconcile_subscription_sources(self, active_sources: Iterable[str]) -> None:
+        """Remove subscription snapshots no longer declared by the active config."""
+        sources = tuple(dict.fromkeys(active_sources))
+        with self.connection:
+            if sources:
+                placeholders = ",".join("?" for _ in sources)
+                self.connection.execute(
+                    f"DELETE FROM subscriptions WHERE source NOT IN ({placeholders}) "
+                    "AND source NOT LIKE 'static:%'",
+                    sources,
+                )
+            else:
+                self.connection.execute("DELETE FROM subscriptions WHERE source NOT LIKE 'static:%'")
+            self.connection.execute("DELETE FROM nodes WHERE id NOT IN (SELECT node_id FROM node_sources)")
+
     def close(self) -> None:
         self.connection.close()
 

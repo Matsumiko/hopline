@@ -29,6 +29,16 @@ class SchedulerCliTests(unittest.TestCase):
 
         self.assertEqual([result.source for result in results], ["one", "two"])
         self.assertEqual(syncer.sync_url.await_count, 2)
+
+    def test_scheduler_does_not_retire_sources_after_partial_cycle(self) -> None:
+        syncer = type("FakeSyncer", (), {})()
+        syncer.registry = type("FakeRegistry", (), {"reconcile_subscription_sources": lambda self, sources: (_ for _ in ()).throw(AssertionError("partial cycle retired sources"))})()
+        syncer.sync_url = AsyncMock(side_effect=lambda source: (scheduler.stop(), SyncResult(source, True, 1, 0, False))[1])
+        scheduler = SubscriptionScheduler(syncer, ["one", "two"], interval=10, jitter=0)
+
+        results = asyncio.run(scheduler.sync_once())
+
+        self.assertEqual([result.source for result in results], ["one"])
         scheduler.stop()
 
     def test_geo_command_fetches_exit_ip_resolves_and_persists(self) -> None:
