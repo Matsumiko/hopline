@@ -30,7 +30,7 @@
 
 ## Berikutnya
 
-1. Pisahkan acceptance target dari health probe, klasifikasikan node/protocol yang gagal, lalu ulangi setelah health cycle berikutnya.
+1. Ulangi acceptance protocol-specific pada `api.ipify.org` dan `api64.ipify.org`, pisahkan hasil IPv4/IPv6, dan ukur success rate per node.
 2. Tetapkan production provider probe target dan retention metrics.
 
 Trace VMess dan forced-route production smoke sudah selesai; tidak ada perubahan parser/generator yang diperlukan dari bukti ini. Acceptance berulang belum cukup stabil untuk menutup Gate F1.
@@ -83,6 +83,8 @@ Smoke terbaru dengan source Hopline: subscription 300 node / invalid 0; generate
 - Trace redacted mengisolasi satu kegagalan transient pada node VMess `483b5b097c2c`: hostname node menghasilkan `NXDOMAIN`, lalu koneksi reset. Ini masalah runtime/provider node, bukan penolakan parser atau generator; tidak ada perubahan service production.
 - Acceptance berulang production selama tiga putaran setelah health cycle: VLESS `9/9` berhasil; VMess `8/9`; Trojan `6/9`; Shadowsocks `4/9`. Semua sampel memakai forced route dan target `https://api.ipify.org?format=json`; kegagalan teramati sebagai `SSL_EOF`/request failure pada node tertentu. VMess latency sukses berkisar `1.3–13.4s` dan menunjukkan variasi tinggi.
 - Node acceptance yang gagal tetap berstatus `healthy` dengan counter health sukses, karena health production menguji `http://cp.cloudflare.com/`, sedangkan acceptance menguji `api.ipify.org`; ini menunjukkan kegagalan destination-specific, bukan bukti health persistence rusak.
+- Matrix target pada generation aktif menguji 10 node sampel ke `api.ipify.org`, `api64.ipify.org`, dan health target `cp.cloudflare.com`. SS sample `001a5d3dbe56` dan `005ad94eddcd` lulus dua target IP; VLESS `000696533d9e` dan `00109feb6fbd` lulus; VMess `252551c6c920` lulus dua target, sedangkan `49e62e6f9273` timeout pada keduanya; Trojan `00c57c72366d` gagal target IPv4 tetapi lulus target IPv6.
+- Probe `cp.cloudflare.com` pada port generation aktif `18776` tidak identik dengan acceptance: sebagian node lulus health tetapi gagal target IP, dan sebagian target IP tetap lulus setelah health probe error. Health probe saat ini diperlakukan sebagai liveness, bukan bukti egress universal.
 - Seluruh file yang dirujuk PRD dan README tersedia.
 - Link ke indeks ADR dan ADR-001 tersedia.
 - Placeholder diagram arsitektur di PRD diganti dengan diagram Mermaid yang memuat gateway, picker, sing-box, syncer, checker, scorer, dan SQLite.
@@ -146,7 +148,7 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 
 | Risiko | Status | Bukti/kondisi | Next action |
 |---|---|---|---|
-| Protocol egress belum stabil lintas node | open | Tiga putaran forced-route: VLESS `9/9`, VMess `8/9`, Trojan `6/9`, Shadowsocks `4/9`; error node tertentu berupa SSL EOF/request failure sementara health probe `cp.cloudflare.com` tetap berhasil | Pisahkan acceptance target dari health probe, klasifikasikan node/protocol yang gagal, lalu ulangi setelah health cycle berikutnya |
+| Protocol egress belum stabil lintas node | open | Matrix target menunjukkan VLESS sample lulus dua target; VMess memiliki satu node timeout dua target; Trojan memiliki kegagalan IPv4-specific; tiga putaran sebelumnya menghasilkan VLESS `9/9`, VMess `8/9`, Trojan `6/9`, Shadowsocks `4/9` | Ulangi acceptance protocol-specific pada `api.ipify.org` dan `api64.ipify.org`, pisahkan IPv4/IPv6, lalu evaluasi node secara individual |
 | Country production belum terisi penuh | in progress | Auto-refresh mengikuti scheduler health dan langsung mengantrekan semua node eligible; mayoritas masih `unknown` karena route/provider dapat gagal | Biarkan queue berjalan dan pantau provider failure serta metadata stale |
 | Provider geolocation gratis memiliki rate limit dan perubahan response | open | Queue memakai concurrency health (`4` pada production saat verifikasi) dan fallback chain; provider `reallyfreegeoip` mengembalikan HTTP 403 saat direct smoke | Pantau error provider; turunkan concurrency bila provider mulai rate-limit |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
