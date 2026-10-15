@@ -7,14 +7,15 @@ import os
 import shutil
 import signal
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from .config import HoplineConfig
 from .engine import SingBoxEngine
 from .gateway import Gateway
-from .geolocation import GeolocationResolver, fetch_exit_ip
-from .health import HealthChecker
+from .geolocation import GeolocationResolver, fetch_exit_ip, is_fresh
+from .health import HealthChecker, HealthState
 from .registry import SQLiteRegistry
 from .scheduler import SubscriptionScheduler
 from .syncer import Syncer
@@ -30,9 +31,13 @@ def _parser() -> argparse.ArgumentParser:
         sub.add_argument("--url", default=os.environ.get("HOPLINE_SUBSCRIPTION_URL"), help="subscription URL")
         sub.add_argument("--db", default=DEFAULT_DB, help="SQLite registry path")
         sub.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
-    geo = subparsers.add_parser("geo", help="Resolve the exit IP and country of one node")
+    geo = subparsers.add_parser("geo", help="Resolve the exit IP and country of one or more nodes")
+    geo_target = geo.add_mutually_exclusive_group(required=True)
+    geo_target.add_argument("--node", help="node ID to test")
+    geo_target.add_argument("--all", action="store_true", help="resolve all nodes missing fresh country metadata")
+    geo.add_argument("--concurrency", type=int, default=2, help="maximum concurrent node lookups with --all")
+    geo.add_argument("--limit", type=int, help="maximum number of nodes to refresh with --all")
     geo.add_argument("--config", default=os.environ.get("HOPLINE_CONFIG", "hopline.toml"), help="TOML config path")
-    geo.add_argument("--node", required=True, help="node ID to test")
     geo.add_argument("--exit-ip-url", default="https://api.ipify.org?format=json", help="HTTPS endpoint returning the observed IP")
     geo.add_argument("--json", action="store_true", dest="as_json", help="emit JSON only")
     doctor = subparsers.add_parser("doctor", help="Check local Hopline prerequisites")
@@ -71,33 +76,105 @@ async def _sync(url: str, database: str) -> dict[str, object]:
         registry.close()
 
 
+async def _resolve_geo_node(
+    config: HoplineConfig,
+    registry: SQLiteRegistry,
+    node_id: str,
+    exit_ip_url: str,
+    resolver: GeolocationResolver,
+) -> dict[str, object]:
+    ip = await asyncio.to_thread(
+        fetch_exit_ip,
+        proxy_host=config.gateway_host,
+        proxy_port=config.gateway_port,
+        proxy_username=f"node-{node_id}",
+        proxy_password=config.proxy_password,
+        target_url=exit_ip_url,
+    )
+    result = await asyncio.to_thread(resolver.resolve, ip)
+    registry.save_geolocation(node_id, result)
+    return {
+        "node": node_id,
+        "ip": result.ip,
+        "country_code": result.country_code,
+        "country": result.country,
+        "asn": result.asn,
+        "organization": result.organization,
+        "provider": result.provider,
+        "checked_at": result.checked_at,
+    }
+
+
 async def _geo(config_path: str, node_id: str, exit_ip_url: str) -> dict[str, object]:
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
     try:
         if node_id not in {node.id for node in registry.list_nodes()}:
             raise ValueError(f"node not found: {node_id}")
-        ip = await asyncio.to_thread(
-            fetch_exit_ip,
-            proxy_host=config.gateway_host,
-            proxy_port=config.gateway_port,
-            proxy_username=f"node-{node_id}",
-            proxy_password=config.proxy_password,
-            target_url=exit_ip_url,
-        )
-        result = await asyncio.to_thread(GeolocationResolver().resolve, ip)
-        registry.save_geolocation(node_id, result)
-        return {
-            "node": node_id,
-            "ip": result.ip,
-            "country_code": result.country_code,
-            "country": result.country,
-            "asn": result.asn,
-            "organization": result.organization,
-            "provider": result.provider,
-            "checked_at": result.checked_at,
-        }
+        return await _resolve_geo_node(config, registry, node_id, exit_ip_url, GeolocationResolver())
+    finally:
+        registry.close()
 
+
+async def _geo_all(
+    config_path: str,
+    exit_ip_url: str,
+    concurrency: int,
+    limit: int | None = None,
+) -> dict[str, object]:
+    if concurrency <= 0:
+        raise ValueError("geo concurrency must be positive")
+    if limit is not None and limit <= 0:
+        raise ValueError("geo limit must be positive")
+    config = HoplineConfig.from_file(config_path)
+    registry = SQLiteRegistry(config.database)
+    try:
+        now = time.time()
+        records = {row["node_id"]: row for row in registry.list_geolocation()}
+        selected: list[str] = []
+        skipped = {"fresh": 0, "dead": 0, "quarantine": 0}
+        for node in registry.list_nodes():
+            health = registry.health_record(node.id)
+            if health is not None and health.state == HealthState.DEAD:
+                skipped["dead"] += 1
+                continue
+            if health is not None and health.state == HealthState.QUARANTINE:
+                skipped["quarantine"] += 1
+                continue
+            geo = records.get(node.id)
+            if geo is not None and 0 <= now - geo["checked_at"] <= config.country_max_age:
+                skipped["fresh"] += 1
+                continue
+            selected.append(node.id)
+            if limit is not None and len(selected) >= limit:
+                break
+        resolver = GeolocationResolver()
+        semaphore = asyncio.Semaphore(concurrency)
+        successes: list[dict[str, object]] = []
+        errors: dict[str, int] = {}
+
+        async def resolve(node_id: str) -> None:
+            async with semaphore:
+                try:
+                    successes.append(await _resolve_geo_node(config, registry, node_id, exit_ip_url, resolver))
+                except Exception as error:
+                    name = type(error).__name__
+                    errors[name] = errors.get(name, 0) + 1
+
+        await asyncio.gather(*(resolve(node_id) for node_id in selected))
+        countries: dict[str, int] = {}
+        for result in successes:
+            country = str(result["country_code"])
+            countries[country] = countries.get(country, 0) + 1
+        return {
+            "mode": "all",
+            "selected": len(selected),
+            "updated": len(successes),
+            "failed": len(selected) - len(successes),
+            "errors": errors,
+            "skipped": skipped,
+            "countries": countries,
+        }
     finally:
         registry.close()
 
@@ -262,12 +339,14 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             await metrics.stop()
         await control.stop()
         registry.close()
-
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "geo":
-            payload = asyncio.run(_geo(args.config, args.node, args.exit_ip_url))
+            if args.all:
+                payload = asyncio.run(_geo_all(args.config, args.exit_ip_url, args.concurrency, args.limit))
+            else:
+                payload = asyncio.run(_geo(args.config, args.node, args.exit_ip_url))
             _emit(payload, args.as_json)
             return 0
         if args.command == "doctor":

@@ -100,7 +100,15 @@ Untuk memverifikasi lokasi IP exit satu node, daemon harus sedang berjalan dan n
 python3 -m hopline geo --config hopline.toml --node <node-id> --json
 ```
 
-Command ini membuka request HTTPS ke endpoint self-IP melalui Gateway memakai route `node-<node-id>`, lalu mengirim IP hasilnya ke fallback geolocation dan menyimpan metadata non-secret ke SQLite. `--exit-ip-url` dapat mengganti endpoint self-IP yang kompatibel mengembalikan `{"ip":"..."}`. Command gagal jika node tidak ada, Gateway tidak berjalan, atau response tidak berisi IP valid.
+Untuk mengisi country banyak node secara terkontrol, gunakan batch refresh. Metadata fresh dilewati, node `dead` dan `quarantine` dilewati, dan `--limit` membatasi jumlah node pada satu batch:
+
+```bash
+python3 -m hopline geo --config hopline.toml --all --limit 10 --concurrency 2 --json
+```
+
+Command batch membuka request HTTPS self-IP melalui route masing-masing `node-<node-id>`, menjalankan fallback geolocation, menyimpan metadata non-secret ke SQLite, lalu menampilkan ringkasan country. Jalankan ulang sampai `selected` dan `failed` sesuai kebutuhan. Jangan menjalankan lookup pada setiap request `/status`.
+
+Command single membuka request HTTPS ke endpoint self-IP melalui Gateway memakai route `node-<node-id>`, lalu mengirim IP hasilnya ke fallback geolocation dan menyimpan metadata non-secret ke SQLite. `--exit-ip-url` dapat mengganti endpoint self-IP yang kompatibel mengembalikan `{"ip":"..."}`. Command gagal jika node tidak ada, Gateway tidak berjalan, atau response tidak berisi IP valid.
 
 
 Jalankan sekali atau sebagai daemon:

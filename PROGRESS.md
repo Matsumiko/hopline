@@ -127,13 +127,17 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Full suite setelah perubahan status API: `95 tests — OK`. Backup deployed control module berada di `/var/backups/hopline/status-protocol-20261015T055432Z`; service lokal tetap active dan listener control `127.0.0.1:18772` merespons.
 - `/status` kini memiliki breakdown `countries` berdasarkan metadata geolocation tersimpan. Smoke production setelah deploy menunjukkan `1.848` node dalam key `unknown` karena belum ada country metadata aktif pada snapshot tersebut; agregat country/state konsisten dengan global health.
 - Full suite setelah penambahan country breakdown: `96 tests — OK`. Backup deployed control module berada di `/var/backups/hopline/status-country-20261015T055900Z`; service lokal active dan control `127.0.0.1:18772` merespons.
+- Akar masalah country `unknown` dikonfirmasi: registry production memiliki `1.849` node tetapi `0` row geolocation. Diagnostic satu node melalui route aktual berhasil memperoleh exit IP dan country `RU`.
+- Collector `hopline geo --all` ditambahkan untuk refresh metadata country secara eksplisit dan terbatas; tidak dijalankan pada setiap `/status`.
+- Deploy collector CLI ke production menggunakan backup `/var/backups/hopline/geo-collector-20261015T074839Z`. Batch terbatas `--limit 3 --concurrency 1` memproses 3 node: 2 berhasil, 1 gagal karena `GeoLookupError`; metadata tersimpan menghasilkan country `JP: 1`, `RU: 1`, `US: 1`. `/status` live menampilkan ketiganya dan invariant country/global health lulus.
+- Full suite setelah collector country: `97 tests — OK`.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |
 |---|---|---|---|
 | VMess production pool kecil dan lambat | open | Source VMess tambahan memiliki 16 node dan seluruhnya lulus forced-route HTTP 200; total VMess registry 25 karena gabungan source lain. Latency source baru 985–1944 ms | Ulangi acceptance setelah refresh berikutnya dan pantau node yang berubah/hilang |
-| Country production belum diverifikasi | blocked | Subscription aktif dan metadata geolocation production belum cukup untuk country acceptance | Jalankan diagnostic `hopline geo` pada node production yang sudah terbukti egress, lalu ulangi country routing smoke |
-| Provider geolocation gratis memiliki rate limit dan perubahan response | open | Fallback chain dan parser response sudah ada; policy refresh/retention runtime belum ditetapkan | Tetapkan scheduler/on-demand policy dan cache freshness sebelum production |
+| Country production belum terisi penuh | in progress | Batch collector sudah mengisi JP, RU, dan US; node lain tetap `unknown`, dan satu dari tiga route pada batch pertama gagal di resolver | Jalankan batch `hopline geo --all --limit N --concurrency 1..2` secara bertahap dan pantau rate limit/provider failure |
+| Provider geolocation gratis memiliki rate limit dan perubahan response | open | Batch pertama menghasilkan 2 sukses dan 1 `GeoLookupError`; fallback resolver tetap dipakai | Jalankan refresh bertahap dengan limit/concurrency kecil; jangan lookup pada `/status` |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
 
 

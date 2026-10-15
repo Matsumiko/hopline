@@ -1,16 +1,18 @@
+import unittest
 import asyncio
 import json
 import subprocess
 import sys
 import tempfile
-import unittest
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from hopline.geolocation import GeoResult
+from hopline.cli import _geo, _geo_all
+from hopline.health import HealthState
 from hopline.models import Node
 from hopline.registry import SQLiteRegistry
-from hopline.cli import _geo
 from hopline.scheduler import SubscriptionScheduler
 from hopline.syncer import SyncResult
 
@@ -40,6 +42,43 @@ class SchedulerCliTests(unittest.TestCase):
 
         self.assertEqual([result.source for result in results], ["one"])
         scheduler.stop()
+
+    def test_geo_all_refreshes_missing_nodes_and_skips_dead_and_fresh(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "registry.db"
+            config_path = Path(directory) / "hopline.toml"
+            config_path.write_text(
+                f'static_nodes = ["vless://00000000-0000-4000-8000-000000000099@example.test:443"]\n\n[hopline]\ndatabase = "{database}"\ncountry_max_age = 3600\n\n[auth]\npassword = "local-secret"\n',
+                encoding="utf-8",
+            )
+            config_path.chmod(0o600)
+            registry = SQLiteRegistry(str(database))
+            registry.replace_subscription(
+                "fixture",
+                "hash",
+                [
+                    Node("fresh", "vless", "fresh.test", 443, "secret-fresh"),
+                    Node("missing", "vless", "missing.test", 443, "secret-missing"),
+                    Node("dead", "vless", "dead.test", 443, "secret-dead"),
+                ],
+            )
+            registry.save_health("fresh", HealthState.HEALTHY, 1, 0, 10.0, None)
+            registry.save_health("missing", HealthState.HEALTHY, 1, 0, 10.0, None)
+            registry.save_health("dead", HealthState.DEAD, 3, 3, None, "timeout")
+            from hopline.geolocation import GeoResult
+            registry.save_geolocation("fresh", GeoResult("203.0.113.1", "ID", "Indonesia", None, None, "fixture", time.time()))
+            registry.close()
+
+            async def resolve(_config, _registry, node_id, _url, _resolver):
+                return {"node": node_id, "country_code": "US"}
+
+            with patch("hopline.cli._resolve_geo_node", new=resolve):
+                payload = asyncio.run(_geo_all(str(config_path), "https://api.example.test/ip", 2))
+
+            self.assertEqual(payload["selected"], 1)
+            self.assertEqual(payload["updated"], 1)
+            self.assertEqual(payload["countries"], {"US": 1})
+            self.assertEqual(payload["skipped"], {"fresh": 1, "dead": 1, "quarantine": 0})
 
     def test_geo_command_fetches_exit_ip_resolves_and_persists(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
