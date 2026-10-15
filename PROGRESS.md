@@ -30,9 +30,10 @@
 
 ## Berikutnya
 
-1. Uji VLESS/VMess export dengan trace sing-box dan bandingkan dengan runtime Nekobox.
-2. Jalankan sampel egress berulang pada SS plugin yang berhasil.
-3. Tetapkan production provider probe target dan retention metrics.
+1. Jalankan sampel egress berulang pada SS plugin yang berhasil.
+2. Tetapkan production provider probe target dan retention metrics.
+
+Trace VMess dan forced-route production smoke sudah selesai; tidak ada perubahan parser/generator yang diperlukan dari bukti ini.
 
 ## Bukti
 
@@ -78,6 +79,8 @@ Gate F1: **in progress**. Fix `v2ray-plugin` sudah membuat direct export Shadows
 
 Parity NekoBox terbaru: source NekoBox `TrojanVLESSBean.cpp`, `VMessBean.cpp`, dan `Bean2CoreObj_box.cpp` menjadi acuan untuk Reality/uTLS, ALPN, gRPC `service_name`, `h2→http`, flow normalization, dan WS early-data. Hopline mengadopsi field upstream-compatible; fork-only xhttp/TLS fragment tidak diaktifkan.
 Smoke terbaru dengan source Hopline: subscription 300 node / invalid 0; generated VLESS dan VMess config masing-masing `sing-box check=0`; VLESS relay timeout dan VMess relay `SSL_ERROR_SYSCALL` tetap terjadi pada sampel provider yang sama.
+- Koreksi validasi VMess production: generated config VMess WS/TLS dan WS tanpa TLS masing-masing lulus `sing-box check=0`; forced-route smoke awal berhasil `2/3` VMess, lalu rerun berhasil `3/3` VMess. Dalam rerun yang sama, VLESS `3/3`, Trojan `3/3`, dan Shadowsocks `3/3` mengembalikan HTTP `200` serta exit IP.
+- Trace redacted mengisolasi satu kegagalan transient pada node VMess `483b5b097c2c`: hostname node menghasilkan `NXDOMAIN`, lalu koneksi reset. Ini masalah runtime/provider node, bukan penolakan parser atau generator; tidak ada perubahan service production.
 - Seluruh file yang dirujuk PRD dan README tersedia.
 - Link ke indeks ADR dan ADR-001 tersedia.
 - Placeholder diagram arsitektur di PRD diganti dengan diagram Mermaid yang memuat gateway, picker, sing-box, syncer, checker, scorer, dan SQLite.
@@ -141,7 +144,7 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 
 | Risiko | Status | Bukti/kondisi | Next action |
 |---|---|---|---|
-| VMess production pool kecil dan lambat | open | Source VMess tambahan memiliki 16 node dan seluruhnya lulus forced-route HTTP 200; total VMess registry 25 karena gabungan source lain. Latency source baru 985–1944 ms | Ulangi acceptance setelah refresh berikutnya dan pantau node yang berubah/hilang |
+| VMess production runtime | in progress | Registry memiliki 24 node VMess (`19 healthy`, `2 degraded`, `3 dead` saat inspeksi); forced-route rerun `3/3` berhasil. Satu sampel transient gagal karena hostname `NXDOMAIN`, diklasifikasikan sebagai risiko node/provider runtime | Ulangi acceptance setelah refresh health dan pantau node yang berubah/hilang |
 | Country production belum terisi penuh | in progress | Auto-refresh mengikuti scheduler health dan langsung mengantrekan semua node eligible; mayoritas masih `unknown` karena route/provider dapat gagal | Biarkan queue berjalan dan pantau provider failure serta metadata stale |
 | Provider geolocation gratis memiliki rate limit dan perubahan response | open | Queue memakai concurrency health (`4` pada production saat verifikasi) dan fallback chain; provider `reallyfreegeoip` mengembalikan HTTP 403 saat direct smoke | Pantau error provider; turunkan concurrency bila provider mulai rate-limit |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
