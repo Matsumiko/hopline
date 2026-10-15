@@ -5,6 +5,7 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 ## [Unreleased]
 
 ### Added
+- Production PC lokal kini tervalidasi untuk `rotate`, forced `node-<id>`, sticky session, dan country routing. Sticky mempertahankan exit IP yang sama lintas koneksi; country `DE` dan `AM` hanya memilih node dengan metadata negara yang sesuai; country tanpa pool mengembalikan `503` secara cepat. Metadata SS belum tersedia karena diagnostic exit-IP SS gagal.
 - File-backed SQLite registry memakai WAL dan `busy_timeout=5000` agar health writes tidak gagal ketika active probe, control API, atau Gateway traffic membaca database bersamaan. Regression test mencakup concurrent read transaction.
 - Production PC lokal tervalidasi dengan VLESS, VMess, Trojan, dan Shadowsocks: forced route masing-masing HTTPS `200`, 48/48 concurrent CONNECT `200`, auth salah/kosong `407`, dan status akhir 4 healthy.
 - Menyamakan active HTTP probe dengan semantik 9router: CONNECT harus berhasil dan response target harus selesai dengan status HTTP numerik apa pun; target `4xx/5xx` tidak lagi menjadi false-negative health, sedangkan timeout, TLS, malformed response, dan CONNECT rejection tetap gagal. Menambahkan regression coverage.
