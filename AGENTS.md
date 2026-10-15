@@ -27,6 +27,14 @@
 11. Gunakan generation baru untuk koneksi baru; drain generation lama sampai koneksi aktif nol. Jangan gunakan in-place SIGHUP sebagai primitive stream-preserving.
 12. Gunakan pola dan struktur dokumen yang sudah ada; jangan membuat dokumen kedua untuk informasi yang sama.
 
+## Scope Production yang Wajib
+
+- **Production test dan deployment default hanya dilakukan pada production PC lokal ini**, yaitu service systemd `hopline.service` pada listener `127.0.0.1:18770-18773`.
+- Agent **MUST NOT** memakai SSH, remote shell, remote copy, remote deployment, atau host lain untuk test, smoke, restart, atau validasi Hopline.
+- Agent **MUST NOT** membaca `.env` untuk mencari target remote atau mencoba akses remote sebagai bagian dari validasi default.
+- Host remote hanya boleh disentuh jika user meminta secara eksplisit dalam pesan yang sama dan menyebut target serta operasi yang diminta. Tanpa permintaan eksplisit itu, anggap remote out of scope dan jangan melakukan preflight sekalipun.
+- Frasa `production`, `production test`, dan `production smoke` di percakapan ini berarti production PC lokal, bukan host remote.
+
 ## Urutan Kerja
 
 1. `PROGRESS.md` → PRD/arsitektur yang relevan → implementasi.

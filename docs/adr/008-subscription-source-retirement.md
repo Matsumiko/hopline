@@ -3,6 +3,7 @@
 - **Status:** accepted untuk lifecycle subscription Fase 1
 - **Scope:** ownership source subscription, node-source reconciliation, dan scheduler batch boundary
 - **Evidence:** `hopline/registry.py`, `hopline/scheduler.py`, `tests/test_structured_hysteresis.py`, `tests/test_scheduler_cli.py`
+- **Operational scope:** validasi production hanya dilakukan pada systemd service PC lokal di `127.0.0.1:18770-18773`; host remote bukan scope default.
 
 ## Context
 
@@ -40,4 +41,4 @@ Hysteresis tiga valid snapshot tetap berlaku untuk node yang hilang dari source 
 - `test_retiring_source_removes_orphans_but_keeps_shared_nodes` membuktikan source lama dan orphan node dihapus, sedangkan shared node dan source aktif dipertahankan.
 - `test_scheduler_does_not_retire_sources_after_partial_cycle` membuktikan stop di tengah siklus tidak menjalankan retirement.
 - Full suite terakhir: 92 test lulus dengan `ResourceWarning` diperlakukan sebagai error.
-- Runtime production refresh belum dikonfirmasi karena akses SSH VPS ditolak; service lokal hanya diperiksa read-only.
+- Production PC lokal dikonfirmasi setelah deploy dan restart: 4 source aktif, 0 source orphan, 0 source missing, 0 orphan node, dan 1.833 node owned. Valid local proxy auth menghasilkan HTTP 200; tanpa auth menghasilkan HTTP 407.

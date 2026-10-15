@@ -162,7 +162,7 @@ Active health Hopline memakai HTTP/URL probe ringan melalui node yang diuji. Ful
 checkip.com → ip.cc → cekipsaya.com?action=lookup&target={ip}
 ```
 
-`cekipsaya` dikirim dengan `Referer: https://cekipsaya.com/cek-ip-saya/`. Hasil disimpan terpisah dari health pada registry: IP, country code/name, ASN, organisasi, provider, dan timestamp. `resolved=false` tetap dapat diterima bila response memiliki IP dan country yang valid. Lookup wajib dijalankan melalui tunnel node yang diuji; lookup dari VPS hanya membuktikan IP VPS. Provider failure atau hasil stale tidak mengubah health node dan belum mengaktifkan `country-*` routing otomatis.
+`cekipsaya` dikirim dengan `Referer: https://cekipsaya.com/cek-ip-saya/`. Hasil disimpan terpisah dari health pada registry: IP, country code/name, ASN, organisasi, provider, dan timestamp. `resolved=false` tetap dapat diterima bila response memiliki IP dan country yang valid. Lookup wajib dijalankan melalui tunnel node yang diuji; lookup dari mesin pemanggil hanya membuktikan IP mesin pemanggil. Provider failure atau hasil stale tidak mengubah health node dan belum mengaktifkan `country-*` routing otomatis.
 
 `node-<id>` adalah forced routing: hanya node tersebut yang dicoba dan tidak ada fallback ke kandidat lain.
 
@@ -188,7 +188,7 @@ Default load gate menjalankan 16 concurrent CONNECT dengan limit 4 per node: tep
 
 ## Installation host Linux
 
-Run as root on a dedicated VPS. Keep source, config, and runtime state separate:
+Run as root on the local Linux production host when installing the systemd service. Keep source, config, and runtime state separate:
 
 ```bash
 groupadd --system hopline
@@ -204,6 +204,7 @@ systemctl enable --now hopline.service
 
 Install `sing-box` pada path system-wide yang dapat dibaca user `hopline`, misalnya `/usr/local/bin/sing-box`, lalu pastikan `sing_box_binary` menunjuk ke path tersebut. Binary di `/home/ubuntu/.local/bin` tidak dapat dipakai service karena `ProtectHome=true`.
 Set `PYTHONPATH=/opt/hopline/app` in the service environment or install the package into the service Python environment. The service reads private config from `/etc/hopline`, writes SQLite state only to `/var/lib/hopline`, and keeps control API, gateway, and sing-box listeners bound to localhost. Never put subscription URLs or node credentials in unit files, shell history, logs, or repository files.
+Production validation scope is local-only: use the systemd service on `127.0.0.1:18770-18773`. Do not use SSH or another host for tests, smoke runs, deployment, restart, or validation unless the user explicitly requests that remote operation in the same message.
 
 Operational checks:
 
