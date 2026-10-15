@@ -5,6 +5,7 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 ## [Unreleased]
 
 ### Added
+- Mengoreksi scope bukti production: acceptance empat protokol sebelumnya berasal dari daemon isolated `28770-28773`, bukan systemd registry 901 node. Systemd PC kini disinkronkan dari `main`, memakai auth dan active HTTP probe, lalu divalidasi langsung di `18770-18773`. SS/Trojan/VLESS forced route lulus; sampel VMess production gagal TLS/relay; rotate lulus 6/8; country NL/DE dan country-sticky lulus; pool country kosong mengembalikan `503`.
 - Production PC lokal kini tervalidasi untuk `rotate`, forced `node-<id>`, sticky session, dan country routing. Sticky mempertahankan exit IP yang sama lintas koneksi; country `DE` dan `AM` hanya memilih node dengan metadata negara yang sesuai; country tanpa pool mengembalikan `503` secara cepat. Metadata SS belum tersedia karena diagnostic exit-IP SS gagal.
 - File-backed SQLite registry memakai WAL dan `busy_timeout=5000` agar health writes tidak gagal ketika active probe, control API, atau Gateway traffic membaca database bersamaan. Regression test mencakup concurrent read transaction.
 - Production PC lokal tervalidasi dengan VLESS, VMess, Trojan, dan Shadowsocks: forced route masing-masing HTTPS `200`, 48/48 concurrent CONNECT `200`, auth salah/kosong `407`, dan status akhir 4 healthy.
