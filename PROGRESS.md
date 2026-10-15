@@ -30,7 +30,7 @@
 
 ## Berikutnya
 
-1. Ulangi acceptance protocol-specific pada `api.ipify.org` dan `api64.ipify.org`, pisahkan hasil IPv4/IPv6, dan ukur success rate per node.
+1. Ulangi acceptance protocol-specific pada `api4.ipify.org` dan `api6.ipify.org`, pisahkan hasil IPv4/IPv6, dan ukur success rate per node.
 2. Tetapkan production provider probe target dan retention metrics.
 
 Trace VMess dan forced-route production smoke sudah selesai; tidak ada perubahan parser/generator yang diperlukan dari bukti ini. Acceptance berulang belum cukup stabil untuk menutup Gate F1.
@@ -85,6 +85,8 @@ Smoke terbaru dengan source Hopline: subscription 300 node / invalid 0; generate
 - Node acceptance yang gagal tetap berstatus `healthy` dengan counter health sukses, karena health production menguji `http://cp.cloudflare.com/`, sedangkan acceptance menguji `api.ipify.org`; ini menunjukkan kegagalan destination-specific, bukan bukti health persistence rusak.
 - Matrix target pada generation aktif menguji 10 node sampel ke `api.ipify.org`, `api64.ipify.org`, dan health target `cp.cloudflare.com`. SS sample `001a5d3dbe56` dan `005ad94eddcd` lulus dua target IP; VLESS `000696533d9e` dan `00109feb6fbd` lulus; VMess `252551c6c920` lulus dua target, sedangkan `49e62e6f9273` timeout pada keduanya; Trojan `00c57c72366d` gagal target IPv4 tetapi lulus target IPv6.
 - Probe `cp.cloudflare.com` pada port generation aktif `18776` tidak identik dengan acceptance: sebagian node lulus health tetapi gagal target IP, dan sebagian target IP tetap lulus setelah health probe error. Health probe saat ini diperlakukan sebagai liveness, bukan bukti egress universal.
+- Strict family acceptance pada 12 healthy sample melalui `api4.ipify.org` dan `api6.ipify.org`: dual-family pass pada SS `005ad94eddcd`, Trojan `0010d63ce144`/`0051ef0b7ec7`/`007f327557e5`, VLESS `00109feb6fbd`/`00e03ad3f395`, dan VMess `252551c6c920`. SS `00d496e31c7b` serta VLESS `00bd3bf72f6a` hanya lulus IPv6; SS `001a5d3dbe56` dan VMess `0cd21f1e7576`/`0f794480fc26` gagal pada kedua family.
+- Tidak ada mutasi registry atau health state dari hasil acceptance. Sampel fail-both diklasifikasikan sebagai runtime suspect; sampel single-family diklasifikasikan sebagai address-family limited. Gate F1 tetap terbuka sampai stabilitas per-node dan policy IPv4/IPv6 ditetapkan.
 - Seluruh file yang dirujuk PRD dan README tersedia.
 - Link ke indeks ADR dan ADR-001 tersedia.
 - Placeholder diagram arsitektur di PRD diganti dengan diagram Mermaid yang memuat gateway, picker, sing-box, syncer, checker, scorer, dan SQLite.
@@ -148,7 +150,7 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 
 | Risiko | Status | Bukti/kondisi | Next action |
 |---|---|---|---|
-| Protocol egress belum stabil lintas node | open | Matrix target menunjukkan VLESS sample lulus dua target; VMess memiliki satu node timeout dua target; Trojan memiliki kegagalan IPv4-specific; tiga putaran sebelumnya menghasilkan VLESS `9/9`, VMess `8/9`, Trojan `6/9`, Shadowsocks `4/9` | Ulangi acceptance protocol-specific pada `api.ipify.org` dan `api64.ipify.org`, pisahkan IPv4/IPv6, lalu evaluasi node secara individual |
+| Protocol egress belum stabil lintas node | open | Strict `api4`/`api6`: dual-family pass pada sebagian SS/Trojan/VLESS/VMess; SS/VLESS single-family dan SS/VMess fail-both masih ada. Tiga putaran sebelumnya menghasilkan VLESS `9/9`, VMess `8/9`, Trojan `6/9`, Shadowsocks `4/9` | Ulangi pada sampel lebih luas; tetapkan apakah pool membutuhkan IPv4, IPv6, atau keduanya sebelum menutup Gate F1 |
 | Country production belum terisi penuh | in progress | Auto-refresh mengikuti scheduler health dan langsung mengantrekan semua node eligible; mayoritas masih `unknown` karena route/provider dapat gagal | Biarkan queue berjalan dan pantau provider failure serta metadata stale |
 | Provider geolocation gratis memiliki rate limit dan perubahan response | open | Queue memakai concurrency health (`4` pada production saat verifikasi) dan fallback chain; provider `reallyfreegeoip` mengembalikan HTTP 403 saat direct smoke | Pantau error provider; turunkan concurrency bila provider mulai rate-limit |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
