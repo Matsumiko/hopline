@@ -30,10 +30,10 @@
 
 ## Berikutnya
 
-1. Jalankan sampel egress berulang pada SS plugin yang berhasil.
+1. Pisahkan acceptance target dari health probe, klasifikasikan node/protocol yang gagal, lalu ulangi setelah health cycle berikutnya.
 2. Tetapkan production provider probe target dan retention metrics.
 
-Trace VMess dan forced-route production smoke sudah selesai; tidak ada perubahan parser/generator yang diperlukan dari bukti ini.
+Trace VMess dan forced-route production smoke sudah selesai; tidak ada perubahan parser/generator yang diperlukan dari bukti ini. Acceptance berulang belum cukup stabil untuk menutup Gate F1.
 
 ## Bukti
 
@@ -81,6 +81,8 @@ Parity NekoBox terbaru: source NekoBox `TrojanVLESSBean.cpp`, `VMessBean.cpp`, d
 Smoke terbaru dengan source Hopline: subscription 300 node / invalid 0; generated VLESS dan VMess config masing-masing `sing-box check=0`; VLESS relay timeout dan VMess relay `SSL_ERROR_SYSCALL` tetap terjadi pada sampel provider yang sama.
 - Koreksi validasi VMess production: generated config VMess WS/TLS dan WS tanpa TLS masing-masing lulus `sing-box check=0`; forced-route smoke awal berhasil `2/3` VMess, lalu rerun berhasil `3/3` VMess. Dalam rerun yang sama, VLESS `3/3`, Trojan `3/3`, dan Shadowsocks `3/3` mengembalikan HTTP `200` serta exit IP.
 - Trace redacted mengisolasi satu kegagalan transient pada node VMess `483b5b097c2c`: hostname node menghasilkan `NXDOMAIN`, lalu koneksi reset. Ini masalah runtime/provider node, bukan penolakan parser atau generator; tidak ada perubahan service production.
+- Acceptance berulang production selama tiga putaran setelah health cycle: VLESS `9/9` berhasil; VMess `8/9`; Trojan `6/9`; Shadowsocks `4/9`. Semua sampel memakai forced route dan target `https://api.ipify.org?format=json`; kegagalan teramati sebagai `SSL_EOF`/request failure pada node tertentu. VMess latency sukses berkisar `1.3–13.4s` dan menunjukkan variasi tinggi.
+- Node acceptance yang gagal tetap berstatus `healthy` dengan counter health sukses, karena health production menguji `http://cp.cloudflare.com/`, sedangkan acceptance menguji `api.ipify.org`; ini menunjukkan kegagalan destination-specific, bukan bukti health persistence rusak.
 - Seluruh file yang dirujuk PRD dan README tersedia.
 - Link ke indeks ADR dan ADR-001 tersedia.
 - Placeholder diagram arsitektur di PRD diganti dengan diagram Mermaid yang memuat gateway, picker, sing-box, syncer, checker, scorer, dan SQLite.
@@ -144,7 +146,7 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 
 | Risiko | Status | Bukti/kondisi | Next action |
 |---|---|---|---|
-| VMess production runtime | in progress | Registry memiliki 24 node VMess (`19 healthy`, `2 degraded`, `3 dead` saat inspeksi); forced-route rerun `3/3` berhasil. Satu sampel transient gagal karena hostname `NXDOMAIN`, diklasifikasikan sebagai risiko node/provider runtime | Ulangi acceptance setelah refresh health dan pantau node yang berubah/hilang |
+| Protocol egress belum stabil lintas node | open | Tiga putaran forced-route: VLESS `9/9`, VMess `8/9`, Trojan `6/9`, Shadowsocks `4/9`; error node tertentu berupa SSL EOF/request failure sementara health probe `cp.cloudflare.com` tetap berhasil | Pisahkan acceptance target dari health probe, klasifikasikan node/protocol yang gagal, lalu ulangi setelah health cycle berikutnya |
 | Country production belum terisi penuh | in progress | Auto-refresh mengikuti scheduler health dan langsung mengantrekan semua node eligible; mayoritas masih `unknown` karena route/provider dapat gagal | Biarkan queue berjalan dan pantau provider failure serta metadata stale |
 | Provider geolocation gratis memiliki rate limit dan perubahan response | open | Queue memakai concurrency health (`4` pada production saat verifikasi) dan fallback chain; provider `reallyfreegeoip` mengembalikan HTTP 403 saat direct smoke | Pantau error provider; turunkan concurrency bila provider mulai rate-limit |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
