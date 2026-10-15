@@ -8,8 +8,15 @@ from .models import Node
 
 class SQLiteRegistry:
     def __init__(self, database: str | sqlite3.Connection) -> None:
-        self.connection = sqlite3.connect(database) if isinstance(database, str) else database
+        self.connection = (
+            sqlite3.connect(database, timeout=5.0)
+            if isinstance(database, str)
+            else database
+        )
         self.connection.row_factory = sqlite3.Row
+        self.connection.execute("PRAGMA busy_timeout = 5000")
+        if isinstance(database, str):
+            self.connection.execute("PRAGMA journal_mode = WAL")
         self.connection.execute("PRAGMA foreign_keys = ON")
         self._create_schema()
 

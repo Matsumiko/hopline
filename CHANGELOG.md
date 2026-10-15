@@ -5,6 +5,8 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 ## [Unreleased]
 
 ### Added
+- File-backed SQLite registry memakai WAL dan `busy_timeout=5000` agar health writes tidak gagal ketika active probe, control API, atau Gateway traffic membaca database bersamaan. Regression test mencakup concurrent read transaction.
+- Production PC lokal tervalidasi dengan VLESS, VMess, Trojan, dan Shadowsocks: forced route masing-masing HTTPS `200`, 48/48 concurrent CONNECT `200`, auth salah/kosong `407`, dan status akhir 4 healthy.
 - Menyamakan active HTTP probe dengan semantik 9router: CONNECT harus berhasil dan response target harus selesai dengan status HTTP numerik apa pun; target `4xx/5xx` tidak lagi menjadi false-negative health, sedangkan timeout, TLS, malformed response, dan CONNECT rejection tetap gagal. Menambahkan regression coverage.
 - Parser Trojan sekarang mempertahankan password provider arbitrary dan tidak lagi memaksa format UUID; outbound generator meneruskan password tersebut ke sing-box.
 - Full suite terbaru menjalankan 87 test tanpa `ResourceWarning`; smoke ephemeral menguji VLESS, VMess, Trojan, dan Shadowsocks dengan authenticated HTTP 200 serta invalid/missing credential HTTP 407 tanpa menyentuh service production. Load smoke menghasilkan 4 koneksi diterima dan 12 ditolak dari 16 concurrent; HTTPS proxy acceptance mengembalikan payload `pong`.

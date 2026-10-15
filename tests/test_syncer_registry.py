@@ -2,7 +2,10 @@ import asyncio
 import base64
 import shutil
 import sqlite3
+import tempfile
 import unittest
+from pathlib import Path
+from hopline.models import Node
 from hopline.registry import SQLiteRegistry
 from hopline.syncer import Syncer
 
@@ -69,6 +72,24 @@ class SyncerRegistryTests(unittest.TestCase):
                 await engine.close()
 
         asyncio.run(scenario())
+
+    def test_health_write_survives_concurrent_read_transaction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "hopline.db")
+            registry = SQLiteRegistry(database)
+            registry.replace_subscription(
+                "fixture", "hash", [Node("node-a", "vless", "edge.test", 443, "secret")]
+            )
+            reader = sqlite3.connect(database)
+            try:
+                reader.execute("BEGIN")
+                reader.execute("SELECT * FROM nodes").fetchall()
+                record = registry.save_health("node-a", "healthy", 1, 0, 12.0, None)
+                self.assertEqual(record.state.value, "healthy")
+            finally:
+                reader.rollback()
+                reader.close()
+                registry.close()
 
     def test_schema_is_created_on_connection(self) -> None:
         connection = sqlite3.connect(":memory:")
