@@ -35,12 +35,25 @@ class ControlServer:
 
     def status(self) -> dict[str, Any]:
         nodes = self.registry.list_nodes()
-        health = self.registry.list_health()
+        records = {record.node_id: record for record in self.registry.list_health()}
         states = {state.value: 0 for state in HealthState}
-        states["unknown"] = max(0, len(nodes) - len(health))
-        for record in health:
-            states[record.state.value] += 1
-        return {"nodes": len(nodes), "health": states, "schema_version": self.registry.schema_version()}
+        protocols: dict[str, dict[str, int]] = {}
+        for node in nodes:
+            record = records.get(node.id)
+            state = record.state.value if record else "unknown"
+            states[state] = states.get(state, 0) + 1
+            breakdown = protocols.setdefault(
+                node.protocol,
+                {"total": 0, **{health_state.value: 0 for health_state in HealthState}, "unknown": 0},
+            )
+            breakdown["total"] += 1
+            breakdown[state] += 1
+        return {
+            "nodes": len(nodes),
+            "health": states,
+            "protocols": protocols,
+            "schema_version": self.registry.schema_version(),
+        }
 
     def nodes(self) -> list[dict[str, Any]]:
         records = {record.node_id: record for record in self.registry.list_health()}

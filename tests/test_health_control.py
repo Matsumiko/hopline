@@ -56,6 +56,34 @@ class HealthControlTests(unittest.TestCase):
         self.assertEqual(checker.record_success("a").state, HealthState.DEGRADED)
         self.assertEqual(checker.record_success("a").state, HealthState.HEALTHY)
 
+    def test_status_breaks_down_totals_by_protocol_and_health(self) -> None:
+        registry = SQLiteRegistry(":memory:")
+        registry.replace_subscription(
+            "fixture",
+            "hash",
+            [
+                Node("vless-healthy", "vless", "vless.test", 443, "secret-1"),
+                Node("vless-dead", "vless", "vless2.test", 443, "secret-2"),
+                Node("vmess-healthy", "vmess", "vmess.test", 443, "secret-3"),
+                Node("trojan-unknown", "trojan", "trojan.test", 443, "secret-4"),
+            ],
+        )
+        registry.save_health("vless-healthy", HealthState.HEALTHY, 1, 0, 12.0, None)
+        registry.save_health("vless-dead", HealthState.DEAD, 0, 3, None, "timeout")
+        registry.save_health("vmess-healthy", HealthState.HEALTHY, 1, 0, 18.0, None)
+
+        status = ControlServer(registry).status()
+
+        self.assertEqual(status["nodes"], 4)
+        self.assertEqual(status["health"]["healthy"], 2)
+        self.assertEqual(status["health"]["dead"], 1)
+        self.assertEqual(status["health"]["unknown"], 1)
+        self.assertEqual(status["protocols"]["vless"], {
+            "total": 2, "healthy": 1, "degraded": 0, "dead": 1, "quarantine": 0, "unknown": 0,
+        })
+        self.assertEqual(status["protocols"]["vmess"]["healthy"], 1)
+        self.assertEqual(status["protocols"]["trojan"]["unknown"], 1)
+
     def test_control_api_exposes_geo_metadata_without_credentials(self) -> None:
         async def scenario() -> None:
             registry = SQLiteRegistry(":memory:")

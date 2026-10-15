@@ -128,8 +128,25 @@ GET /status
 GET /nodes
 ```
 
-Health state dasar: `healthy`, `degraded`, `dead`, dan `quarantine`. Response hanya memuat node ID, protocol, host, port, nama, state, counters, dan latency; credential tidak pernah dikembalikan.
-Gateway memilih node `healthy` atau `degraded` yang tidak sedang cooldown; node `dead` dan `quarantine` dilewati. Kegagalan pertama memberi cooldown 30 detik. Tiga kegagalan berturut-turut memindahkan node ke `dead`; active probe mencoba ulang dengan backoff 1, 2, 5, 15, lalu 60 menit. Satu sukses memulihkan node ke `degraded`, dan tiga sukses berturut-turut memulihkannya ke `healthy`.
+`/status` mempertahankan field `nodes`, `health`, dan `schema_version`. Field tambahan `protocols` memuat setiap protokol (`ss`, `trojan`, `vless`, `vmess`) dengan `total`, `healthy`, `degraded`, `dead`, `quarantine`, dan `unknown`. `health` adalah agregat global; jumlah state dalam setiap protocol harus sama dengan `total`, dan jumlah `total` protocol harus sama dengan `nodes`.
+
+Contoh bentuk response:
+
+```json
+{
+  "nodes": 1850,
+  "health": {"healthy": 461, "degraded": 184, "dead": 13, "quarantine": 0, "unknown": 1192},
+  "protocols": {
+    "ss": {"total": 603, "healthy": 143, "degraded": 60, "dead": 5, "quarantine": 0, "unknown": 395},
+    "trojan": {"total": 605, "healthy": 144, "degraded": 62, "dead": 1, "quarantine": 0, "unknown": 398},
+    "vless": {"total": 618, "healthy": 156, "degraded": 60, "dead": 3, "quarantine": 0, "unknown": 399},
+    "vmess": {"total": 24, "healthy": 18, "degraded": 2, "dead": 4, "quarantine": 0, "unknown": 0}
+  },
+  "schema_version": 2
+}
+```
+
+Health state dasar: `healthy`, `degraded`, `dead`, dan `quarantine`. Response `/nodes` hanya memuat node ID, protocol, host, port, nama, state, counters, dan latency; credential tidak pernah dikembalikan.
 Jika CONNECT valid tetapi tidak ada kandidat yang tersedia, gateway mengembalikan `503 Service Unavailable` dengan cepat. Jika CONNECT ke kandidat gagal sebelum respons `200`, gateway mencoba kandidat berikutnya. Hopline baru mengirim `200 Connection Established` setelah upstream berhasil, sehingga retry tidak terjadi setelah byte client diteruskan.
 Active probe opsional dikonfigurasi tanpa credential. Target wajib diisi agar node baru tidak tetap `unknown`; scheduler menjalankan probe melalui bounded queue dengan concurrency default 10:
 
