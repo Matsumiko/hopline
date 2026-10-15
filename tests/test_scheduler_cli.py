@@ -80,6 +80,43 @@ class SchedulerCliTests(unittest.TestCase):
             self.assertEqual(payload["countries"], {"US": 1})
             self.assertEqual(payload["skipped"], {"fresh": 1, "dead": 1, "quarantine": 0})
 
+    def test_geo_all_queues_all_missing_nodes_with_bounded_concurrency(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "registry.db"
+            config_path = Path(directory) / "hopline.toml"
+            config_path.write_text(
+                f'static_nodes = ["vless://00000000-0000-4000-8000-000000000199@example.test:443"]\n\n[hopline]\ndatabase = "{database}"\ncountry_max_age = 3600\n\n[auth]\npassword = "local-secret"\n',
+                encoding="utf-8",
+            )
+            config_path.chmod(0o600)
+            registry = SQLiteRegistry(str(database))
+            registry.replace_subscription(
+                "fixture",
+                "hash",
+                [Node(str(index), "vless", "edge.test", 443, f"secret-{index}") for index in range(4)],
+            )
+            for index in range(4):
+                registry.save_health(str(index), HealthState.HEALTHY, 1, 0, 10.0, None)
+            registry.close()
+            active = 0
+            maximum = 0
+
+            async def resolve(_config, _registry, node_id, _url, _resolver):
+                nonlocal active, maximum
+                active += 1
+                maximum = max(maximum, active)
+                await asyncio.sleep(0.01)
+                active -= 1
+                return {"node": node_id, "country_code": "US"}
+
+            with patch("hopline.cli._resolve_geo_node", new=resolve):
+                payload = asyncio.run(_geo_all(str(config_path), "https://api.example.test/ip", 2))
+
+            self.assertEqual(payload["selected"], 4)
+            self.assertEqual(payload["updated"], 4)
+            self.assertEqual(payload["countries"], {"US": 4})
+            self.assertEqual(maximum, 2)
+
     def test_geo_command_fetches_exit_ip_resolves_and_persists(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "registry.db"

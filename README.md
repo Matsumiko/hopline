@@ -69,9 +69,6 @@ jitter = 30
 gateway_host = "127.0.0.1"
 control_port = 18772
 country_max_age = 3600
-country_refresh_interval = 900
-country_refresh_limit = 10
-country_refresh_concurrency = 1
 sing_box_binary = "/usr/local/bin/sing-box"
 engine_workdir = "/var/lib/hopline/engine"
 max_active_connections = 64
@@ -110,7 +107,7 @@ python3 -m hopline geo --config hopline.toml --all --limit 10 --concurrency 2 --
 Command batch membuka request HTTPS self-IP melalui route masing-masing `node-<node-id>`, menjalankan fallback geolocation, menyimpan metadata non-secret ke SQLite, lalu menampilkan ringkasan country. Jalankan ulang sampai `selected` dan `failed` sesuai kebutuhan. Jangan menjalankan lookup pada setiap request `/status`.
 
 Command single membuka request HTTPS ke endpoint self-IP melalui Gateway memakai route `node-<node-id>`, lalu mengirim IP hasilnya ke fallback geolocation dan menyimpan metadata non-secret ke SQLite. `--exit-ip-url` dapat mengganti endpoint self-IP yang kompatibel mengembalikan `{"ip":"..."}`. Command gagal jika node tidak ada, Gateway tidak berjalan, atau response tidak berisi IP valid.
-Daemon juga menjalankan refresh country otomatis di background setelah Gateway aktif. Default-nya setiap 900 detik, maksimal 10 node per siklus, dan satu lookup paralel. Metadata fresh dilewati berdasarkan `country_max_age`; node `dead`/`quarantine` dilewati. `/status` hanya membaca metadata tersimpan dan tidak menjalankan network lookup.
+Daemon juga menjalankan refresh country otomatis di background setelah Gateway aktif, menggunakan interval dan concurrency yang sama seperti active health (`[health].interval` dan `[health].concurrency`). Semua node eligible langsung masuk bounded queue; metadata fresh, node `dead`, dan `quarantine` dilewati. `/status` hanya membaca metadata tersimpan dan tidak menjalankan network lookup.
 
 
 Jalankan sekali atau sebagai daemon:

@@ -15,7 +15,7 @@ hopline geo --config <file> --node <node-id> --json
 hopline geo --config <file> --all --concurrency 2 --json
 ```
 
-Daemon juga menjalankan collector background setelah Gateway aktif, dengan default interval 900 detik, limit 10 node per siklus, dan concurrency 1. Cache `country_max_age` mencegah lookup metadata fresh.
+Daemon juga menjalankan collector background setelah Gateway aktif, memakai interval dan concurrency yang sama dengan active health (`[health].interval` dan `[health].concurrency`). Semua node eligible langsung masuk bounded queue; cache `country_max_age` mencegah lookup metadata fresh.
 
 Mode batch memilih node tanpa metadata country fresh, melewati node `dead` dan `quarantine`, mengambil exit IP melalui Gateway memakai route `node-<id>`, menjalankan resolver geolocation fallback, dan menyimpan hanya metadata non-secret.
 

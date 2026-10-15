@@ -147,7 +147,7 @@ async def _geo_all(
                 skipped["fresh"] += 1
                 continue
             selected.append(node.id)
-            if limit is not None and len(selected) >= limit:
+            if limit is not None and limit > 0 and len(selected) >= limit:
                 break
         resolver = GeolocationResolver()
         semaphore = asyncio.Semaphore(concurrency)
@@ -182,12 +182,11 @@ async def _geo_all(
 async def _geo_refresh_loop(
     config_path: str,
     interval: float,
-    limit: int,
     concurrency: int,
 ) -> None:
     while True:
         try:
-            await _geo_all(config_path, DEFAULT_EXIT_IP_URL, concurrency, limit)
+            await _geo_all(config_path, DEFAULT_EXIT_IP_URL, concurrency)
         except (OSError, ValueError, RuntimeError):
             pass
         await asyncio.sleep(interval)
@@ -330,9 +329,8 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             country_refresh_task = asyncio.create_task(
                 _geo_refresh_loop(
                     config_path,
-                    config.country_refresh_interval,
-                    config.country_refresh_limit,
-                    config.country_refresh_concurrency,
+                    config.probe_interval,
+                    config.probe_concurrency,
                 )
             )
         if once:

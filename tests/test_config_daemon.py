@@ -28,9 +28,9 @@ class ConfigDaemonTests(unittest.TestCase):
             config = HoplineConfig.from_file(path)
             self.assertEqual(config.interval, 60)
             self.assertEqual(config.jitter, 5)
-            self.assertEqual(config.country_refresh_interval, 900)
-            self.assertEqual(config.country_refresh_limit, 10)
-            self.assertEqual(config.country_refresh_concurrency, 1)
+            self.assertEqual(config.country_max_age, 3600)
+            self.assertEqual(config.probe_interval, 300)
+            self.assertEqual(config.probe_concurrency, 10)
 
     def test_country_refresh_loop_runs_and_cancels_cleanly(self) -> None:
         async def scenario() -> None:
@@ -42,11 +42,11 @@ class ConfigDaemonTests(unittest.TestCase):
                 completed.set()
 
             with patch("hopline.cli._geo_all", new=refresh):
-                task = asyncio.create_task(_geo_refresh_loop("config.toml", 3600, 10, 1))
+                task = asyncio.create_task(_geo_refresh_loop("config.toml", 3600, 10))
                 await asyncio.wait_for(completed.wait(), 1)
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
-            self.assertEqual(calls, [("config.toml", "https://api.ipify.org?format=json", 1, 10)])
+            self.assertEqual(calls, [("config.toml", "https://api.ipify.org?format=json", 10)])
 
         asyncio.run(scenario())
 
