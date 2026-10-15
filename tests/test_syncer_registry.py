@@ -91,6 +91,12 @@ class SyncerRegistryTests(unittest.TestCase):
                 reader.close()
                 registry.close()
 
+
+    def test_health_write_for_retired_node_is_ignored(self) -> None:
+        registry = SQLiteRegistry(":memory:")
+        self.assertIsNone(registry.save_health("retired", "dead", 1, 1, None, "timeout"))
+        self.assertEqual(registry.list_health(), [])
+        registry.close()
     def test_schema_is_created_on_connection(self) -> None:
         connection = sqlite3.connect(":memory:")
         registry = SQLiteRegistry(connection)

@@ -262,6 +262,8 @@ class SQLiteRegistry:
         import time
 
         updated_at = time.time()
+        if self.connection.execute("SELECT 1 FROM nodes WHERE id = ?", (node_id,)).fetchone() is None:
+            return None
         with self.connection:
             self.connection.execute(
                 """INSERT INTO health(

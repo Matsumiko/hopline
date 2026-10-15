@@ -61,7 +61,14 @@ class SubscriptionScheduler:
                 results.append(result)
         registry = getattr(self.syncer, "registry", None)
         if completed and registry is not None:
+            before = registry.snapshot_ids() if self.engine is not None else ()
             registry.reconcile_subscription_sources(self.sources)
+            if self.engine is not None and before != registry.snapshot_ids():
+                nodes = registry.list_nodes()
+                if nodes:
+                    generation = await self.engine.apply_nodes(nodes)
+                    if self.on_generation is not None:
+                        self.on_generation(generation)
         return results
 
     async def run(self, *, initial_sync: bool = True) -> None:

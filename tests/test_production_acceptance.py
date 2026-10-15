@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from hopline.health import HealthState
 from hopline.models import Node
-from tools.production_acceptance import public_result, select_healthy_samples
+from tools.production_acceptance import _target_family, public_result, select_healthy_samples
 
 
 class ProductionAcceptanceTests(unittest.TestCase):
@@ -30,6 +30,11 @@ class ProductionAcceptanceTests(unittest.TestCase):
         self.assertEqual([node.id for node in selected["vless"]], ["vless-1"])
         self.assertEqual([node.id for node in selected["trojan"]], ["trojan-1"])
         self.assertEqual(selected["vmess"], [])
+
+    def test_target_family_detects_ipify_family(self) -> None:
+        self.assertEqual(_target_family("https://api4.ipify.org?format=json"), "ipv4")
+        self.assertEqual(_target_family("https://api6.ipify.org?format=json"), "ipv6")
+        self.assertIsNone(_target_family("https://api.ipify.org?format=json"))
 
     def test_public_result_redacts_connection_parameters(self) -> None:
         result = SimpleNamespace(

@@ -146,8 +146,10 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Production config saat verifikasi memakai health interval `60s` dan concurrency `4`; queue geo tidak lagi dibatasi 10 node per 15 menit.
 - Implementasi capability egress dual-stack selesai: `[capability]` memvalidasi URL HTTPS, freshness, timeout, interval, concurrency; registry menyimpan hasil per `node_id`/family tanpa secret; daemon menjalankan bounded refresh untuk node eligible; Gateway menyediakan route `ipv4`, `ipv6`, dan sticky variants dengan filter metadata fresh/matching.
 - Control `/nodes` menampilkan capability non-secret per family. Collector mengecek expected IP family dan tidak memodifikasi health. Regression baru mencakup collector persistence, family validation, registry mismatch rejection, serta Gateway pool filtering.
-- Shutdown daemon diperbaiki: `ControlServer` dan `MetricsServer` kini ditutup eksplisit setelah task, Gateway, dan engine selesai. Test daemon dan full suite tidak lagi menghasilkan `ResourceWarning` socket.
-- Bukti: `python3 -W error::ResourceWarning -m unittest discover -s tests -v` → `103 tests — OK`, tanpa warning.
+- Acceptance dual-stack setelah race fix: production PC lokal aktif pada `18770`, `18772`, `18773`; tidak ada `IntegrityError`, `Traceback`, atau `Task exception` baru pada journal pascarestart. Race retirement-health diperbaiki dengan regenerasi generation setelah source reconciliation dan no-op health write untuk node yang sudah retired. Backup production: `/var/backups/hopline/retirement-race-20261015T230104Z`.
+- Harness acceptance sekarang memvalidasi expected family dari target `api4.ipify.org`/`api6.ipify.org`, sehingga IP family yang salah menjadi failure, bukan success.
+- Sampel forced-route `10 node/protocol`: IPv4 SS `6/10`, Trojan `9/10`, VLESS `9/10`, VMess `0/10`; IPv6 SS `10/10`, Trojan `10/10`, VLESS `10/10`, VMess `0/10`. Pada node yang sama: SS `6` dual-family/`4` IPv6-only; Trojan `9` dual-family/`1` IPv6-only; VLESS `9` dual-family/`1` IPv6-only; VMess `0` berhasil.
+- Policy: `rotate` tetap backward-compatible dan tidak dibatasi family; client yang membutuhkan family eksplisit memakai `ipv4` atau `ipv6`. VMess belum dinyatakan capability-eligible dari evidence ini.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |

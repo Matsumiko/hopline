@@ -125,7 +125,7 @@ def _read_body(connection: socket.socket, headers: dict[str, str], initial: byte
 
 def fetch_exit_ip(
     *, node_id: str, password: str, gateway_host: str, gateway_port: int,
-    target: str, timeout: float,
+    target: str, timeout: float, expected_family: str | None = None,
 ) -> tuple[int, str, float]:
     target_host, target_port, target_path = _target_parts(target)
     started = time.perf_counter()
@@ -158,12 +158,14 @@ def fetch_exit_ip(
             address = str(ip_address(str(value)))
         except (UnicodeDecodeError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
             raise AcceptanceError("target_did_not_return_ip") from error
+        if expected_family is not None and ("ipv4" if ip_address(address).version == 4 else "ipv6") != expected_family:
+            raise AcceptanceError("exit_ip_family_mismatch")
         return status, address, round((time.perf_counter() - started) * 1000, 1)
     finally:
         connection.close()
 
 
-def _run_node(node: Node, config: HoplineConfig, target: str, timeout: float) -> AcceptanceResult:
+def _run_node(node: Node, config: HoplineConfig, target: str, timeout: float, expected_family: str | None) -> AcceptanceResult:
     protocol = PROTOCOL_NAMES[node.protocol]
     try:
         status, exit_ip, latency_ms = fetch_exit_ip(
@@ -173,14 +175,23 @@ def _run_node(node: Node, config: HoplineConfig, target: str, timeout: float) ->
             gateway_port=config.gateway_port,
             target=target,
             timeout=timeout,
+            expected_family=expected_family,
         )
     except (AcceptanceError, OSError, ssl.SSLError, TimeoutError, ValueError):
         return AcceptanceResult(protocol, node.id, None, None, None, False, "request_failed")
     return AcceptanceResult(protocol, node.id, status, exit_ip, latency_ms, True)
 
+def _target_family(target: str) -> str | None:
+    hostname = urlsplit(target).hostname or ""
+    if hostname.startswith("api4."):
+        return "ipv4"
+    if hostname.startswith("api6."):
+        return "ipv6"
+    return None
 
 def run_acceptance(config_path: str, per_protocol: int, target: str, timeout: float) -> dict[str, object]:
     config = HoplineConfig.from_file(config_path)
+    expected_family = _target_family(target)
     if config.gateway_host not in {"127.0.0.1", "::1", "localhost"} or config.gateway_port != 18770:
         raise ValueError("production acceptance requires the local gateway on port 18770")
     registry = SQLiteRegistry(config.database)
@@ -190,7 +201,7 @@ def run_acceptance(config_path: str, per_protocol: int, target: str, timeout: fl
         samples = select_healthy_samples(nodes, health, per_protocol)
         results: list[AcceptanceResult] = []
         for protocol in PROTOCOL_NAMES.values():
-            results.extend(_run_node(node, config, target, timeout) for node in samples[protocol])
+            results.extend(_run_node(node, config, target, timeout, expected_family) for node in samples[protocol])
         grouped: dict[str, list[dict[str, object]]] = {protocol: [] for protocol in PROTOCOL_NAMES.values()}
         for result in results:
             grouped[result.protocol].append(public_result(result))
