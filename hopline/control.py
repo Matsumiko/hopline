@@ -36,8 +36,10 @@ class ControlServer:
     def status(self) -> dict[str, Any]:
         nodes = self.registry.list_nodes()
         records = {record.node_id: record for record in self.registry.list_health()}
+        geolocation = {row["node_id"]: row for row in self.registry.list_geolocation()}
         states = {state.value: 0 for state in HealthState}
         protocols: dict[str, dict[str, int]] = {}
+        countries: dict[str, dict[str, int]] = {}
         for node in nodes:
             record = records.get(node.id)
             state = record.state.value if record else "unknown"
@@ -48,10 +50,19 @@ class ControlServer:
             )
             breakdown["total"] += 1
             breakdown[state] += 1
+            geo = geolocation.get(node.id)
+            country = str(geo["country_code"]).upper() if geo and geo["country_code"] else "unknown"
+            country_breakdown = countries.setdefault(
+                country,
+                {"total": 0, **{health_state.value: 0 for health_state in HealthState}, "unknown": 0},
+            )
+            country_breakdown["total"] += 1
+            country_breakdown[state] += 1
         return {
             "nodes": len(nodes),
             "health": states,
             "protocols": protocols,
+            "countries": countries,
             "schema_version": self.registry.schema_version(),
         }
 

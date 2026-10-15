@@ -84,6 +84,38 @@ class HealthControlTests(unittest.TestCase):
         self.assertEqual(status["protocols"]["vmess"]["healthy"], 1)
         self.assertEqual(status["protocols"]["trojan"]["unknown"], 1)
 
+    def test_status_breaks_down_country_and_unknown_metadata(self) -> None:
+        registry = SQLiteRegistry(":memory:")
+        registry.replace_subscription(
+            "fixture",
+            "hash",
+            [
+                Node("id-healthy", "vless", "id.test", 443, "secret-1"),
+                Node("id-dead", "trojan", "id2.test", 443, "secret-2"),
+                Node("no-country", "vmess", "unknown.test", 443, "secret-3"),
+            ],
+        )
+        registry.save_health("id-healthy", HealthState.HEALTHY, 1, 0, 10.0, None)
+        registry.save_health("id-dead", HealthState.DEAD, 0, 3, None, "timeout")
+        from hopline.geolocation import GeoResult
+        registry.save_geolocation(
+            "id-healthy",
+            GeoResult("203.0.113.10", "id", "Indonesia", "AS64500", "Example", "fixture", 10.0),
+        )
+        registry.save_geolocation(
+            "id-dead",
+            GeoResult("203.0.113.11", "ID", "Indonesia", "AS64500", "Example", "fixture", 10.0),
+        )
+
+        countries = ControlServer(registry).status()["countries"]
+
+        self.assertEqual(countries["ID"], {
+            "total": 2, "healthy": 1, "degraded": 0, "dead": 1, "quarantine": 0, "unknown": 0,
+        })
+        self.assertEqual(countries["unknown"], {
+            "total": 1, "healthy": 0, "degraded": 0, "dead": 0, "quarantine": 0, "unknown": 1,
+        })
+
     def test_control_api_exposes_geo_metadata_without_credentials(self) -> None:
         async def scenario() -> None:
             registry = SQLiteRegistry(":memory:")

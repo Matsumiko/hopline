@@ -128,7 +128,7 @@ GET /status
 GET /nodes
 ```
 
-`/status` mempertahankan field `nodes`, `health`, dan `schema_version`. Field tambahan `protocols` memuat setiap protokol (`ss`, `trojan`, `vless`, `vmess`) dengan `total`, `healthy`, `degraded`, `dead`, `quarantine`, dan `unknown`. `health` adalah agregat global; jumlah state dalam setiap protocol harus sama dengan `total`, dan jumlah `total` protocol harus sama dengan `nodes`.
+`/status` mempertahankan field `nodes`, `health`, dan `schema_version`. Field tambahan `protocols` memuat setiap protokol (`ss`, `trojan`, `vless`, `vmess`) dengan `total`, `healthy`, `degraded`, `dead`, `quarantine`, dan `unknown`. Field `countries` memakai `country_code` dari metadata geolocation tersimpan sebagai key uppercase; node tanpa metadata country masuk key `unknown`. Setiap country juga memiliki `total` dan breakdown state yang sama. `health` adalah agregat global; jumlah state dalam setiap protocol/country harus sama dengan `total`, dan jumlah `total` protocol/country harus sama dengan `nodes`.
 
 Contoh bentuk response:
 
@@ -141,6 +141,10 @@ Contoh bentuk response:
     "trojan": {"total": 605, "healthy": 144, "degraded": 62, "dead": 1, "quarantine": 0, "unknown": 398},
     "vless": {"total": 618, "healthy": 156, "degraded": 60, "dead": 3, "quarantine": 0, "unknown": 399},
     "vmess": {"total": 24, "healthy": 18, "degraded": 2, "dead": 4, "quarantine": 0, "unknown": 0}
+  },
+  "countries": {
+    "ID": {"total": 120, "healthy": 80, "degraded": 20, "dead": 10, "quarantine": 0, "unknown": 10},
+    "unknown": {"total": 50, "healthy": 10, "degraded": 5, "dead": 2, "quarantine": 0, "unknown": 33}
   },
   "schema_version": 2
 }

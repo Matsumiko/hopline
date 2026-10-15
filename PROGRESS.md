@@ -125,6 +125,8 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Verifikasi seluruh node source VMess `c6fa3d173aee`: ownership langsung source berisi `16` node. Forced-route end-to-end melalui Gateway production PC ke target HTTPS IP-echo menghasilkan `16/16 HTTP 200`, `0` gagal. Latency terukur `985.0–1944.1 ms`; hasil ini membuktikan semua 16 node hidup saat diuji, bukan jaminan permanen karena node subscription dapat berubah.
 - `/status` production PC setelah deploy `control.py` mengembalikan breakdown protokol dan health yang konsisten: `1.850` node; SS `603`, Trojan `605`, VLESS `618`, VMess `24`. Agregat health: healthy `461`, degraded `184`, dead `13`, quarantine `0`, unknown `1.192`. Invariant terverifikasi: total protocol = total node dan jumlah state per protocol = total protocol.
 - Full suite setelah perubahan status API: `95 tests — OK`. Backup deployed control module berada di `/var/backups/hopline/status-protocol-20261015T055432Z`; service lokal tetap active dan listener control `127.0.0.1:18772` merespons.
+- `/status` kini memiliki breakdown `countries` berdasarkan metadata geolocation tersimpan. Smoke production setelah deploy menunjukkan `1.848` node dalam key `unknown` karena belum ada country metadata aktif pada snapshot tersebut; agregat country/state konsisten dengan global health.
+- Full suite setelah penambahan country breakdown: `96 tests — OK`. Backup deployed control module berada di `/var/backups/hopline/status-country-20261015T055900Z`; service lokal active dan control `127.0.0.1:18772` merespons.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |
