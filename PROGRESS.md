@@ -116,11 +116,15 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Bukti production PC lokal: commit `1ad52ff` dideploy hanya untuk `registry.py` dan `scheduler.py` ke `/opt/hopline/app`; backup dibuat di `/var/backups/hopline/source-retirement-20261015T042525Z`; service systemd direstart dan tetap `active`. Refresh berjalan dengan 4 source aktif, 0 source orphan, 0 source missing, 0 orphan node, dan 1.833 node owned. Snapshot terbaru tercatat `2026-10-15 04:26:07`.
 - Boundary smoke production PC: listener `18770`, `18771`, `18772`, `18773` aktif; control status merespons; valid local proxy auth menghasilkan HTTP 200; tanpa auth menghasilkan HTTP 407; tidak ada error journal pascarestart. Config subscription tidak diubah dan URL/credential tidak dicetak.
 - Status gate: implementasi, offline verification, dan refresh production PC lokal selesai. Host lain bukan scope validasi default dan tidak boleh disentuh tanpa permintaan eksplisit user.
+- Acceptance harness production PC ditambahkan di `tools/production_acceptance.py`; output redacted dan hanya mengeluarkan protocol, node ID, status, exit IP, latency, dan verdict. Full suite setelah penambahan test harness: `94 tests — OK`.
+- Acceptance production PC dengan tiga sampel per protokol dan target `https://api.ipify.org?format=json`: Shadowsocks `3/3 HTTP 200`, Trojan `3/3 HTTP 200`, VLESS `3/3 HTTP 200`. VMess belum eligible: 8 node total, `6 dead`, `2 degraded`, `0 healthy`; tidak ada forced-route VMess yang diklaim lulus.
+- Gate Fase 1 sekarang parsial: jalur subscription → health picker → forced Gateway → HTTPS target terbukti untuk SS, Trojan, dan VLESS. VMess menunggu minimal satu node production berstatus healthy; ini belum membuktikan bug parser/generator.
 ## Blocker / Risiko Aktif
 
-| VLESS production sample masih timeout | open | Local ephemeral VLESS smoke lulus; sample node/provider production sebelumnya masih timeout | Bandingkan parameter node dan endpoint yang sama dari NekoBox dan Hopline, lalu ambil trace handshake sing-box |
-| Egress production belum stabil per protocol | open | Local ephemeral VLESS, VMess, Trojan, dan Shadowsocks lulus; bukti production terpisah tetap perlu jika deployment dilakukan | Validasi nanti setelah local feature set dan acceptance selesai |
-| Country production belum diverifikasi | blocked | Subscription aktif dan 1,035 node tersimpan, tetapi geo exit-IP gagal pada node yang tersedia sehingga tidak ada metadata country; country routes merespons 503 | Perbaiki kestabilan protocol/exit-IP pada minimal dua node, jalankan `hopline geo`, lalu ulangi country routing smoke |
+| Risiko | Status | Bukti/kondisi | Next action |
+|---|---|---|---|
+| VMess production pool belum memiliki node healthy | blocked | Acceptance PC lokal menemukan 8 VMess: 6 dead dan 2 degraded; tidak ada sampel eligible untuk forced-route | Audit parameter node VMess yang sama terhadap NekoBox jika provider menyediakan node yang masih hidup; jangan mengubah parser tanpa trace |
+| Country production belum diverifikasi | blocked | Subscription aktif dan metadata geolocation production belum cukup untuk country acceptance | Jalankan diagnostic `hopline geo` pada node production yang sudah terbukti egress, lalu ulangi country routing smoke |
 | Provider geolocation gratis memiliki rate limit dan perubahan response | open | Fallback chain dan parser response sudah ada; policy refresh/retention runtime belum ditetapkan | Tetapkan scheduler/on-demand policy dan cache freshness sebelum production |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
 

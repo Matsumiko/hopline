@@ -186,6 +186,18 @@ PYTHONPATH=. python3 experiments/f1/https_proxy_acceptance.py
 
 Default load gate menjalankan 16 concurrent CONNECT dengan limit 4 per node: tepat 4 koneksi diterima dan sisanya mendapat `503 Service Unavailable`. Acceptance harness membuktikan CONNECT gateway → upstream proxy → origin lokal dan relay payload dua arah.
 
+### Acceptance production PC
+
+Untuk menguji node subscription yang sedang `healthy` melalui systemd production PC, gunakan harness redacted berikut. Harness hanya memakai Gateway lokal `127.0.0.1:18770`, memilih maksimal tiga node per protokol, memakai target HTTPS IP-echo, dan tidak mencetak server, port, UUID, password, URL subscription, atau share-link:
+
+```bash
+sudo -u hopline env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. \
+  python3 tools/production_acceptance.py \
+  --config /etc/hopline/hopline.toml --per-protocol 3
+```
+
+Exit code `0` berarti semua protokol memiliki jumlah sampel yang diminta dan seluruh forced route berhasil. Exit code `1` berarti acceptance berjalan tetapi ada protokol yang kekurangan node healthy atau request gagal. `vmess` dapat berstatus belum teruji jika pool health-nya belum memiliki node eligible; hasil itu bukan bukti parser atau generator rusak.
+
 ## Installation host Linux
 
 Run as root on the local Linux production host when installing the systemd service. Keep source, config, and runtime state separate:
