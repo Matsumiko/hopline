@@ -114,6 +114,31 @@ class GeolocationTests(unittest.TestCase):
             )
         self.assertNotIn("local-secret", str(raised.exception))
 
+    def test_fetch_exit_ip_validates_expected_family(self) -> None:
+        def fetch(_url: str, _proxy: str, _timeout: float) -> bytes:
+            return b'{"ip":"203.0.113.8"}'
+
+        self.assertEqual(
+            fetch_exit_ip(
+                proxy_host="127.0.0.1",
+                proxy_port=18770,
+                proxy_username="node-a",
+                proxy_password="local-secret",
+                expected_family="ipv4",
+                fetch=fetch,
+            ),
+            "203.0.113.8",
+        )
+        with self.assertRaises(GeoLookupError):
+            fetch_exit_ip(
+                proxy_host="127.0.0.1",
+                proxy_port=18770,
+                proxy_username="node-a",
+                proxy_password="local-secret",
+                expected_family="ipv6",
+                fetch=fetch,
+            )
+
     def test_registry_persists_only_non_secret_geolocation_metadata(self) -> None:
         registry = SQLiteRegistry(":memory:")
         registry.replace_subscription("fixture", "hash", [Node("node-a", "vless", "relay.test", 443, "secret-uuid")])
@@ -125,6 +150,17 @@ class GeolocationTests(unittest.TestCase):
         self.assertEqual(record["country_code"], "PL")
         self.assertEqual(record["provider"], "cekipsaya")
         self.assertNotIn("secret-uuid", dict(record).values())
+        registry.close()
+
+    def test_registry_persists_capability_per_family_and_rejects_mismatch(self) -> None:
+        registry = SQLiteRegistry(":memory:")
+        registry.replace_subscription("fixture", "hash", [Node("node-a", "vless", "relay.test", 443, "secret-uuid")])
+        registry.save_capability("node-a", "ipv4", "203.0.113.8", 42.0)
+        registry.save_capability("node-a", "ipv6", "2001:db8::8", 43.0, "temporary")
+        self.assertEqual(registry.capability_record("node-a", "ipv4").ip, "203.0.113.8")
+        self.assertTrue(registry.capability_record("node-a", "ipv6").capable)
+        with self.assertRaises(ValueError):
+            registry.save_capability("node-a", "ipv4", "2001:db8::9", 44.0)
         registry.close()
 
     def test_freshness_rejects_expired_and_future_results(self) -> None:

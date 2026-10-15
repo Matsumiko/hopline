@@ -37,6 +37,7 @@ class ControlServer:
         nodes = self.registry.list_nodes()
         records = {record.node_id: record for record in self.registry.list_health()}
         geolocation = {row["node_id"]: row for row in self.registry.list_geolocation()}
+        capabilities = {(row.node_id, row.family): row for row in self.registry.list_capabilities()}
         states = {state.value: 0 for state in HealthState}
         protocols: dict[str, dict[str, int]] = {}
         countries: dict[str, dict[str, int]] = {}
@@ -69,6 +70,7 @@ class ControlServer:
     def nodes(self) -> list[dict[str, Any]]:
         records = {record.node_id: record for record in self.registry.list_health()}
         geolocation = {row["node_id"]: row for row in self.registry.list_geolocation()}
+        capabilities = {(row.node_id, row.family): row for row in self.registry.list_capabilities()}
         result = []
         for node in self.registry.list_nodes():
             record = records.get(node.id)
@@ -84,6 +86,17 @@ class ControlServer:
                     "successes": record.successes if record else 0,
                     "failures": record.failures if record else 0,
                     "latency_ms": record.latency_ms if record else None,
+                    "capabilities": {
+                        family: {
+                            "capable": record.ip is not None,
+                            "ip": record.ip,
+                            "checked_at": record.checked_at,
+                            "last_error": record.last_error,
+                        }
+                        if (record := capabilities.get((node.id, family)))
+                        else None
+                        for family in ("ipv4", "ipv6")
+                    },
                     "geolocation": (
                         {
                             "ip": geo["ip"],

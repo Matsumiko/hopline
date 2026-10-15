@@ -4,8 +4,8 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 
 ## [Unreleased]
 
-### Added
-- Runtime isolated `28770-28773` dihapus. Production PC sekarang hanya memakai systemd `18770-18773`.
+- Menambahkan routing capability egress `ipv4`/`ipv6` dan `*-sticky-*`: probe family tervalidasi, metadata per node/family tersimpan terpisah dari health, collector bounded dapat menyegarkan hasil fresh, dan Gateway melewati metadata missing/stale atau family mismatch dengan `503` saat pool kosong.
+- Memperbaiki shutdown daemon agar `ControlServer` dan `MetricsServer` selalu ditutup pada `finally`; test suite tidak lagi menghasilkan `ResourceWarning` socket.
 - Subscription production diganti secara clean cutover menjadi empat source privat dengan filter protocol/country. Registry lama dikosongkan sebelum restart; hasil awal 631 node. VMess belum memiliki node healthy pada smoke pertama dan tidak diklaim lulus.
 - Mengoreksi scope bukti production: acceptance empat protokol sebelumnya berasal dari daemon isolated `28770-28773`, bukan systemd registry 901 node. Systemd PC kini disinkronkan dari `main`, memakai auth dan active HTTP probe, lalu divalidasi langsung di `18770-18773`. SS/Trojan/VLESS forced route lulus; sampel VMess production gagal TLS/relay; rotate lulus 6/8; country NL/DE dan country-sticky lulus; pool country kosong mengembalikan `503`.
 - Production PC lokal kini tervalidasi untuk `rotate`, forced `node-<id>`, sticky session, dan country routing. Sticky mempertahankan exit IP yang sama lintas koneksi; country `DE` dan `AM` hanya memilih node dengan metadata negara yang sesuai; country tanpa pool mengembalikan `503` secara cepat. Metadata SS belum tersedia karena diagnostic exit-IP SS gagal.

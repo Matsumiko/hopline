@@ -23,7 +23,9 @@ class Gateway:
         health_state: Callable[[str], HealthState | str | None] | None = None,
         health_available: Callable[[str], bool] | None = None,
         country_metadata: Callable[[str], tuple[str, float] | None] | None = None,
+        capability_metadata: Callable[[str, str], tuple[str, float, str | None] | None] | None = None,
         country_max_age: float = 60 * 60,
+        capability_max_age: float = 60 * 60,
         clock: Callable[[], float] | None = None,
         record_success: Callable[[str], None] | None = None,
         record_failure: Callable[[str, str], None] | None = None,
@@ -35,8 +37,8 @@ class Gateway:
     ) -> None:
         if max_active_connections <= 0:
             raise ValueError("max_active_connections must be positive")
-        if country_max_age <= 0:
-            raise ValueError("country_max_age must be positive")
+        if country_max_age <= 0 or capability_max_age <= 0:
+            raise ValueError("metadata max age must be positive")
         if not proxy_username or not proxy_password:
             raise ValueError("proxy authentication credentials must be non-empty")
         self.host = host
@@ -49,7 +51,9 @@ class Gateway:
             available=health_available,
         )
         self._country_metadata = country_metadata or (lambda _node_id: None)
+        self._capability_metadata = capability_metadata or (lambda _node_id, _family: None)
         self._country_max_age = country_max_age
+        self._capability_max_age = capability_max_age
         self._clock = clock or time.time
         self._record_success = record_success
         self._record_failure = record_failure
@@ -123,12 +127,17 @@ class Gateway:
             if route is None:
                 await self._respond(client, b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
                 return
-            requested_node, sticky_session, country = self._candidates_for_route(route)
+            requested_node, sticky_session, country, family = self._candidates_for_route(route)
             country_filter = self._country_filter(country)
-            candidates = self._picker.candidates(requested_node, eligible=country_filter)
+            capability_filter = self._capability_filter(family)
+            eligible = lambda node_id: (
+                (country_filter is None or country_filter(node_id))
+                and (capability_filter is None or capability_filter(node_id))
+            )
+            candidates = self._picker.candidates(requested_node, eligible=eligible)
             if sticky_session is not None and requested_node != "rotate":
                 candidates += [
-                    node_id for node_id in self._picker.candidates("rotate", eligible=country_filter)
+                    node_id for node_id in self._picker.candidates("rotate", eligible=eligible)
                     if node_id not in candidates
                 ]
             if not candidates:
@@ -269,7 +278,7 @@ class Gateway:
         writer.write(response)
         await writer.drain()
 
-    def _route_from_auth(self, value: str | None) -> tuple[str, str | None, str | None] | None:
+    def _route_from_auth(self, value: str | None) -> tuple[str, str | None, str | None, str | None] | None:
         if value is None or not value.lower().startswith("basic "):
             return None
         try:
@@ -280,33 +289,41 @@ class Gateway:
         if not separator or not username or not hmac.compare_digest(password, self._proxy_password):
             return None
         if username == self._proxy_username or username == "rotate":
-            return "rotate", None, None
-        if username.startswith("sticky-") and username[7:]:
-            return "rotate", username[7:], None
+            return "rotate", None, None, None
         if username in self._generation_credentials:
-            return username, None, None
+            return username, None, None, None
         if username.startswith("node-") and username[5:] in self._generation_credentials:
-            return username[5:], None, None
+            return username[5:], None, None, None
+        if username.startswith("sticky-") and username[7:]:
+            return "rotate", username[7:], None, None
+        if username.startswith(("ipv4", "ipv6")):
+            family, separator, session = username.partition("-sticky-")
+            if family in {"ipv4", "ipv6"} and (not separator or bool(session)):
+                return "rotate", session or None, None, family
         if username.startswith("country-"):
             value = username[8:]
             country, separator, session = value.partition("-sticky-")
             if re.fullmatch(r"[A-Za-z]{2}", country) and (not separator or bool(session)):
-                return "rotate", session or None, country.upper()
+                return "rotate", session or None, country.upper(), None
         return None
 
     def _candidates_for_route(
-        self, route: tuple[str, str | None, str | None]
-    ) -> tuple[str, str | None, str | None]:
-        requested_node, sticky_session, country = route
+        self, route: tuple[str, str | None, str | None, str | None]
+    ) -> tuple[str, str | None, str | None, str | None]:
+        requested_node, sticky_session, country, family = route
         if sticky_session is None:
-            return requested_node, None, country
+            return requested_node, None, country, family
+        country_filter = self._country_filter(country)
+        capability_filter = self._capability_filter(family)
+        eligible = lambda node_id: (
+            (country_filter is None or country_filter(node_id))
+            and (capability_filter is None or capability_filter(node_id))
+        )
         bound = self._sticky.lookup(
             sticky_session,
-            eligible=lambda node_id: bool(
-                self._picker.candidates(node_id, eligible=self._country_filter(country))
-            ),
+            eligible=lambda node_id: bool(self._picker.candidates(node_id, eligible=eligible)),
         )
-        return (bound or "rotate"), sticky_session, country
+        return (bound or "rotate"), sticky_session, country, family
 
     def _country_filter(self, country: str | None) -> Callable[[str], bool] | None:
         if country is None:
@@ -318,6 +335,16 @@ class Gateway:
                 return False
             code, checked_at = metadata
             return code.upper() == country and 0 <= self._clock() - checked_at <= self._country_max_age
+
+        return eligible
+
+    def _capability_filter(self, family: str | None) -> Callable[[str], bool] | None:
+        if family is None:
+            return None
+
+        def eligible(node_id: str) -> bool:
+            metadata = self._capability_metadata(node_id, family)
+            return metadata is not None and metadata[0] == family and 0 <= self._clock() - metadata[1] <= self._capability_max_age
 
         return eligible
 

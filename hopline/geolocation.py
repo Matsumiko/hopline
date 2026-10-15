@@ -75,12 +75,15 @@ def fetch_exit_ip(
     proxy_password: str,
     target_url: str = DEFAULT_EXIT_IP_URL,
     timeout: float = 10,
+    expected_family: str | None = None,
     fetch: Callable[[str, str, float], bytes] | None = None,
 ) -> str:
     """Fetch the observed public IP through one Hopline node route."""
     parsed = urllib.parse.urlsplit(target_url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
         raise ValueError("exit IP URL must be an HTTPS URL without credentials or fragments")
+    if expected_family not in {None, "ipv4", "ipv6"}:
+        raise ValueError("exit IP family is invalid")
     if not proxy_host or not 1 <= proxy_port <= 65535:
         raise ValueError("exit IP proxy endpoint is invalid")
     if not proxy_username or not proxy_password or timeout <= 0:
@@ -93,6 +96,8 @@ def fetch_exit_ip(
     except json.JSONDecodeError:
         value = body.decode("utf-8").strip()
     _require_ip(value)
+    if expected_family is not None and ("ipv4" if ipaddress.ip_address(value).version == 4 else "ipv6") != expected_family:
+        raise GeoLookupError("exit IP family does not match target")
     return value
 
 

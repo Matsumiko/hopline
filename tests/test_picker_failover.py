@@ -20,6 +20,54 @@ class PickerFailoverTests(unittest.TestCase):
         picker = NodePicker(states, state=states.get, available=available.get)
         self.assertEqual(picker.candidates("rotate"), ["b"])
 
+
+    def test_gateway_capability_route_uses_only_fresh_matching_nodes(self) -> None:
+        async def scenario() -> None:
+            received: list[str] = []
+
+            async def upstream(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+                try:
+                    request = await reader.readuntil(b"\r\n\r\n")
+                    token = request.split(b"Proxy-Authorization: Basic ", 1)[1].split(b"\r\n", 1)[0]
+                    received.append(base64.b64decode(token).decode().split(":", 1)[0])
+                    writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                    await writer.drain()
+                finally:
+                    writer.close()
+                    await writer.wait_closed()
+
+            upstream_server = await asyncio.start_server(upstream, "127.0.0.1", 0)
+            capability = {
+                ("node-a", "ipv4"): ("ipv4", 89.0, "203.0.113.1"),
+                ("node-b", "ipv4"): ("ipv4", 100.0, "203.0.113.2"),
+            }
+            gateway = Gateway(
+                host="127.0.0.1",
+                port=0,
+                generation_port=upstream_server.sockets[0].getsockname()[1],
+                generation_credentials={"node-a": "x", "node-b": "x"},
+                capability_metadata=lambda node_id, family: capability.get((node_id, family)),
+                capability_max_age=20,
+                clock=lambda: 110.0,
+                proxy_password="x",
+            )
+            await gateway.start()
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
+                token = base64.b64encode(b"ipv4:x").decode()
+                writer.write(f"CONNECT target.test:443 HTTP/1.1\r\nProxy-Authorization: Basic {token}\r\n\r\n".encode())
+                await writer.drain()
+                self.assertTrue((await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)).startswith(b"HTTP/1.1 200"))
+                self.assertEqual(received, ["node-b"])
+                writer.close()
+                await writer.wait_closed()
+            finally:
+                await gateway.stop()
+                await gateway.wait_closed()
+                upstream_server.close()
+                await upstream_server.wait_closed()
+
+        asyncio.run(scenario())
     def test_gateway_returns_503_when_all_nodes_are_unavailable(self) -> None:
         async def scenario() -> None:
             async def upstream_handler(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

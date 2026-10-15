@@ -10,12 +10,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from hopline.cli import _capability_all, _geo_refresh_loop, _run_daemon
 from hopline.config import HoplineConfig
-from hopline.cli import _geo_refresh_loop, _run_daemon
+from hopline.models import Node
 from hopline.registry import SQLiteRegistry
 from hopline.syncer import SyncResult
-
-
 class ConfigDaemonTests(unittest.TestCase):
     def test_config_requires_private_file_and_reads_sources(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -47,6 +46,42 @@ class ConfigDaemonTests(unittest.TestCase):
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
             self.assertEqual(calls, [("config.toml", "https://api.ipify.org?format=json", 10)])
+
+        asyncio.run(scenario())
+
+    def test_capability_collector_persists_each_family(self) -> None:
+        async def scenario() -> None:
+            with tempfile.TemporaryDirectory() as directory:
+                database = Path(directory) / "registry.db"
+                config_path = Path(directory) / "hopline.toml"
+                config_path.write_text(
+                    f'static_nodes = ["vless://00000000-0000-4000-8000-000000000041@example.test:443"]\n\n'
+                    f'[hopline]\ndatabase = "{database}"\n\n[auth]\npassword = "fixture-local-password"\n',
+                    encoding="utf-8",
+                )
+                config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+                registry = SQLiteRegistry(str(database))
+                registry.replace_subscription(
+                    "fixture",
+                    "hash",
+                    [Node("node-a", "vless", "example.test", 443, "secret")],
+                )
+                registry.close()
+
+                def resolve(**kwargs):
+                    return "203.0.113.41" if kwargs["expected_family"] == "ipv4" else "2001:db8::41"
+
+                with patch("hopline.cli.fetch_exit_ip", new=resolve):
+                    payload = await _capability_all(str(config_path))
+                self.assertEqual(payload["selected"], 2)
+                self.assertEqual(payload["updated"], 2)
+                registry = SQLiteRegistry(str(database))
+                try:
+                    records = registry.list_capabilities()
+                    self.assertEqual({record.family for record in records}, {"ipv4", "ipv6"})
+                    self.assertEqual(len({record.node_id for record in records}), 1)
+                finally:
+                    registry.close()
 
         asyncio.run(scenario())
 

@@ -179,6 +179,62 @@ async def _geo_all(
     finally:
         registry.close()
 
+async def _capability_all(config_path: str) -> dict[str, object]:
+    config = HoplineConfig.from_file(config_path)
+    registry = SQLiteRegistry(config.database)
+    try:
+        now = time.time()
+        selected: list[tuple[str, str]] = []
+        for node in registry.list_nodes():
+            health = registry.health_record(node.id)
+            if health is not None and health.state in {HealthState.DEAD, HealthState.QUARANTINE}:
+                continue
+            for family in ("ipv4", "ipv6"):
+                record = registry.capability_record(node.id, family)
+                if record is not None and record.ip is not None and record.is_fresh(now=now, max_age=config.capability_max_age):
+                    continue
+                selected.append((node.id, family))
+        semaphore = asyncio.Semaphore(config.capability_concurrency)
+        updated = 0
+        errors: dict[str, int] = {}
+
+        async def resolve(node_id: str, family: str) -> None:
+            nonlocal updated
+            async with semaphore:
+                url = config.capability_ipv4_url if family == "ipv4" else config.capability_ipv6_url
+                try:
+                    ip = await asyncio.to_thread(
+                        fetch_exit_ip,
+                        proxy_host=config.gateway_host,
+                        proxy_port=config.gateway_port,
+                        proxy_username=f"node-{node_id}",
+                        proxy_password=config.proxy_password,
+                        target_url=url,
+                        timeout=config.capability_timeout,
+                        expected_family=family,
+                    )
+                    registry.save_capability(node_id, family, ip, time.time())
+                    updated += 1
+                except Exception as error:
+                    registry.save_capability(node_id, family, None, time.time(), type(error).__name__)
+                    name = type(error).__name__
+                    errors[name] = errors.get(name, 0) + 1
+
+        await asyncio.gather(*(resolve(node_id, family) for node_id, family in selected))
+        return {"selected": len(selected), "updated": updated, "failed": len(selected) - updated, "errors": errors}
+    finally:
+        registry.close()
+
+
+async def _capability_refresh_loop(config_path: str, interval: float) -> None:
+    while True:
+        try:
+            await _capability_all(config_path)
+        except (OSError, ValueError, RuntimeError):
+            pass
+        await asyncio.sleep(interval)
+
+
 async def _geo_refresh_loop(
     config_path: str,
     interval: float,
@@ -190,7 +246,6 @@ async def _geo_refresh_loop(
         except (OSError, ValueError, RuntimeError):
             pass
         await asyncio.sleep(interval)
-
 
 def _doctor(database: str) -> dict[str, object]:
     binary = shutil.which("sing-box")
@@ -235,6 +290,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         reserved_ports=(config.gateway_port, config.control_port, config.metrics_port),
     )
     country_refresh_task = None
+    capability_refresh_task = None
     gateway: Gateway | None = None
     scheduler: SubscriptionScheduler | None = None
     metrics = MetricsServer(
@@ -292,7 +348,13 @@ async def _run_daemon(config_path: str, once: bool) -> int:
                 (row["country_code"], row["checked_at"])
                 if (row := registry.geolocation_record(node_id)) else None
             ),
+            capability_metadata=lambda node_id, family: (
+                (record.family, record.checked_at, record.ip)
+                if (record := registry.capability_record(node_id, family)) and record.ip is not None
+                else None
+            ),
             country_max_age=config.country_max_age,
+            capability_max_age=config.capability_max_age,
             record_success=lambda node_id: health.record_success(node_id),
             record_failure=lambda node_id, error: health.record_failure(node_id, error),
             max_active_connections=config.max_active_connections,
@@ -333,6 +395,10 @@ async def _run_daemon(config_path: str, once: bool) -> int:
                     config.probe_concurrency,
                 )
             )
+            if config.capability_enabled:
+                capability_refresh_task = asyncio.create_task(
+                    _capability_refresh_loop(config_path, config.capability_interval)
+                )
         if once:
             print(json.dumps({
                 "sources": len(results),
@@ -360,6 +426,12 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         if country_refresh_task is not None:
             country_refresh_task.cancel()
             await asyncio.gather(country_refresh_task, return_exceptions=True)
+        if capability_refresh_task is not None:
+            capability_refresh_task.cancel()
+            await asyncio.gather(capability_refresh_task, return_exceptions=True)
+        await control.stop()
+        if metrics is not None:
+            await metrics.stop()
         registry.close()
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)

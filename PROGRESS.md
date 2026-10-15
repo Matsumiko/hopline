@@ -144,8 +144,10 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Registry production setelah subscription refresh berisi `1.850` node tetapi `0` row geolocation. Metadata country terikat `node_id` dan dapat hilang ketika node diganti/retired; `/status` dengan benar menempatkan node tanpa metadata ke `unknown`.
 - Auto-refresh country kini mengikuti scheduler health: semua node eligible langsung masuk bounded queue, memakai `[health].interval` dan `[health].concurrency`; metadata fresh, `dead`, dan `quarantine` tetap dilewati. Full suite queue update: `99 tests — OK`.
 - Production config saat verifikasi memakai health interval `60s` dan concurrency `4`; queue geo tidak lagi dibatasi 10 node per 15 menit.
-- Deploy queue geo mengikuti health menggunakan backup `/var/backups/hopline/country-health-queue-20261015T094038Z`; service active. Setelah 15 detik, geolocation rows bertambah menjadi `16` dan `/status` menampilkan country nyata `CH`, `DE`, `FI`, `GB`, `IN`, `JP`, `KR`, `NL`, `RU`, `US`. Invariant country/global health lulus.
-- Deploy auto-refresh menggunakan backup `/var/backups/hopline/country-auto-refresh-20261015T092329Z`; service active.
+- Implementasi capability egress dual-stack selesai: `[capability]` memvalidasi URL HTTPS, freshness, timeout, interval, concurrency; registry menyimpan hasil per `node_id`/family tanpa secret; daemon menjalankan bounded refresh untuk node eligible; Gateway menyediakan route `ipv4`, `ipv6`, dan sticky variants dengan filter metadata fresh/matching.
+- Control `/nodes` menampilkan capability non-secret per family. Collector mengecek expected IP family dan tidak memodifikasi health. Regression baru mencakup collector persistence, family validation, registry mismatch rejection, serta Gateway pool filtering.
+- Shutdown daemon diperbaiki: `ControlServer` dan `MetricsServer` kini ditutup eksplisit setelah task, Gateway, dan engine selesai. Test daemon dan full suite tidak lagi menghasilkan `ResourceWarning` socket.
+- Bukti: `python3 -W error::ResourceWarning -m unittest discover -s tests -v` → `103 tests — OK`, tanpa warning.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |

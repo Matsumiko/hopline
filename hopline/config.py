@@ -19,6 +19,13 @@ class HoplineConfig:
     tunnel_port: int = 18771
     control_port: int = 18772
     country_max_age: float = 60 * 60
+    capability_enabled: bool = False
+    capability_max_age: float = 60 * 60
+    capability_interval: float = 15 * 60
+    capability_timeout: float = 20
+    capability_concurrency: int = 1
+    capability_ipv4_url: str = "https://api4.ipify.org?format=json"
+    capability_ipv6_url: str = "https://api6.ipify.org?format=json"
     sing_box_binary: str = "sing-box"
     engine_workdir: str = ""
     max_active_connections: int = 64
@@ -111,6 +118,22 @@ class HoplineConfig:
         metrics_enabled = bool(health.get("metrics_enabled", False))
         metrics_host = str(health.get("metrics_host", "127.0.0.1"))
         metrics_port = int(health.get("metrics_port", 18773))
+        capability = document.get("capability", {})
+        if not isinstance(capability, dict):
+            raise ValueError("[capability] section must be a table")
+        capability_enabled = bool(capability.get("enabled", False))
+        capability_max_age = float(capability.get("max_age", 60 * 60))
+        capability_interval = float(capability.get("interval", 15 * 60))
+        capability_timeout = float(capability.get("timeout", 20))
+        capability_concurrency = int(capability.get("concurrency", 1))
+        capability_ipv4_url = str(capability.get("ipv4_url", "https://api4.ipify.org?format=json"))
+        capability_ipv6_url = str(capability.get("ipv6_url", "https://api6.ipify.org?format=json"))
+        for capability_url in (capability_ipv4_url, capability_ipv6_url):
+            parsed_capability_url = urlsplit(capability_url)
+            if parsed_capability_url.scheme != "https" or not parsed_capability_url.hostname:
+                raise ValueError("capability target must be an HTTPS URL")
+            if parsed_capability_url.username or parsed_capability_url.password or parsed_capability_url.fragment:
+                raise ValueError("capability target must not contain credentials or fragments")
         auth = document.get("auth", {})
         if not isinstance(auth, dict):
             raise ValueError("[auth] section must be a table")
@@ -131,8 +154,8 @@ class HoplineConfig:
             raise ValueError("control endpoint is invalid")
         if not sing_box_binary or max_active_connections <= 0:
             raise ValueError("sing-box runtime settings are invalid")
-        if probe_interval <= 0 or probe_timeout <= 0 or probe_timeout > probe_interval or probe_concurrency <= 0:
-            raise ValueError("health probe interval, timeout, and concurrency are invalid")
+        if capability_max_age <= 0 or capability_interval <= 0 or capability_timeout <= 0 or capability_timeout > capability_interval or capability_concurrency <= 0:
+            raise ValueError("capability settings are invalid")
         if not probe_proxy_host or not 1 <= probe_proxy_port <= 65535:
             raise ValueError("health proxy endpoint is invalid")
         if metrics_host not in {"127.0.0.1", "::1", "localhost"} or not 1 <= metrics_port <= 65535:
@@ -148,8 +171,14 @@ class HoplineConfig:
             tunnel_port=tunnel_port,
             control_port=control_port,
             country_max_age=country_max_age,
+            capability_enabled=capability_enabled,
+            capability_max_age=capability_max_age,
+            capability_interval=capability_interval,
+            capability_timeout=capability_timeout,
+            capability_concurrency=capability_concurrency,
+            capability_ipv4_url=capability_ipv4_url,
+            capability_ipv6_url=capability_ipv6_url,
             sing_box_binary=sing_box_binary,
-            engine_workdir=engine_workdir,
             probe_targets=tuple(targets),
             probe_interval=probe_interval,
             probe_timeout=probe_timeout,

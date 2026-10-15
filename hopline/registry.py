@@ -102,6 +102,14 @@ class SQLiteRegistry:
                 consecutive_failures INTEGER NOT NULL DEFAULT 0,
                 consecutive_successes INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS node_capabilities (
+                node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                family TEXT NOT NULL,
+                ip TEXT,
+                checked_at REAL NOT NULL,
+                last_error TEXT,
+                PRIMARY KEY(node_id, family)
+            );
             """
         )
         self._ensure_columns()
@@ -167,6 +175,47 @@ class SQLiteRegistry:
             "SELECT node_id, ip, country_code, country, asn, organization, provider, checked_at "
             "FROM geolocation ORDER BY node_id"
         ).fetchall()
+
+    def capability_record(self, node_id: str, family: str):
+        from .capability import CapabilityRecord, FAMILIES
+        if family not in FAMILIES:
+            raise ValueError("capability family is invalid")
+        row = self.connection.execute(
+            "SELECT node_id, family, ip, checked_at, last_error FROM node_capabilities "
+            "WHERE node_id = ? AND family = ?",
+            (node_id, family),
+        ).fetchone()
+        return CapabilityRecord(
+            row["node_id"], row["family"], row["ip"], row["checked_at"], row["last_error"]
+        ) if row else None
+
+    def list_capabilities(self):
+        from .capability import CapabilityRecord
+        return [
+            CapabilityRecord(row["node_id"], row["family"], row["ip"], row["checked_at"], row["last_error"])
+            for row in self.connection.execute(
+                "SELECT node_id, family, ip, checked_at, last_error "
+                "FROM node_capabilities ORDER BY node_id, family"
+            )
+        ]
+
+    def save_capability(
+        self, node_id: str, family: str, ip: str | None, checked_at: float, last_error: str | None = None
+    ):
+        from .capability import FAMILIES, family_for_ip
+        if family not in FAMILIES:
+            raise ValueError("capability family is invalid")
+        if ip is not None and family_for_ip(ip) != family:
+            raise ValueError("capability IP family does not match")
+        with self.connection:
+            self.connection.execute(
+                """INSERT INTO node_capabilities(node_id, family, ip, checked_at, last_error)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(node_id, family) DO UPDATE SET ip=excluded.ip,
+                checked_at=excluded.checked_at, last_error=excluded.last_error""",
+                (node_id, family, ip, checked_at, last_error[:200] if last_error else None),
+            )
+        return self.capability_record(node_id, family)
 
     def schema_version(self) -> int:
         row = self.connection.execute(
