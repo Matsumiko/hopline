@@ -227,16 +227,15 @@ class ParserConfigTests(unittest.TestCase):
     def test_shadowsocks_v2ray_plugin_is_preserved_for_singbox(self) -> None:
         link = (
             "ss://bm9uZTphMGJlZGNkOS01OTQ4LTQzNzItODlkNy05MTlkNTJkYmRmOTM="
-            "@[REDACTED_PROVIDER]-[REDACTED_PROVIDER].[REDACTED_PROVIDER]-[REDACTED_PROVIDER].[REDACTED_PROVIDER]:443"
+            "@relay.example.test:443"
             "?plugin=v2ray-plugin%3Btls%3Bmux%3D0%3Bmode%3Dwebsocket%3Bpath%3D%2F185.82.218.224-443"
-            "%3Bhost%3D[REDACTED_PROVIDER]-[REDACTED_PROVIDER].[REDACTED_PROVIDER]-[REDACTED_PROVIDER].[REDACTED_PROVIDER]"
+            "%3Bhost%3Drelay.example.test"
         )
         node = parse_share_link(link)
         self.assertEqual(node.plugin, "v2ray-plugin")
         self.assertEqual(
             node.plugin_opts,
-            "tls;mux=0;mode=websocket;path=/185.82.218.224-443;host="
-            "[REDACTED_PROVIDER]-[REDACTED_PROVIDER].[REDACTED_PROVIDER]-[REDACTED_PROVIDER].[REDACTED_PROVIDER]",
+            "tls;mux=0;mode=websocket;path=/185.82.218.224-443;host=relay.example.test",
         )
         outbound = build_config([node], listen_port=18771)["outbounds"][0]
         self.assertEqual(outbound["plugin"], "v2ray-plugin")
