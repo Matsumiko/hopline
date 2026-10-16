@@ -148,8 +148,9 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Control `/nodes` menampilkan capability non-secret per family. Collector mengecek expected IP family dan tidak memodifikasi health. Regression baru mencakup collector persistence, family validation, registry mismatch rejection, serta Gateway pool filtering.
 - Acceptance dual-stack setelah race fix: production PC lokal aktif pada `18770`, `18772`, `18773`; tidak ada `IntegrityError`, `Traceback`, atau `Task exception` baru pada journal pascarestart. Race retirement-health diperbaiki dengan regenerasi generation setelah source reconciliation dan no-op health write untuk node yang sudah retired. Backup production: `/var/backups/hopline/retirement-race-20261015T230104Z`.
 - Harness acceptance sekarang memvalidasi expected family dari target `api4.ipify.org`/`api6.ipify.org`, sehingga IP family yang salah menjadi failure, bukan success.
-- Sampel forced-route `10 node/protocol`: IPv4 SS `6/10`, Trojan `9/10`, VLESS `9/10`, VMess `0/10`; IPv6 SS `10/10`, Trojan `10/10`, VLESS `10/10`, VMess `0/10`. Pada node yang sama: SS `6` dual-family/`4` IPv6-only; Trojan `9` dual-family/`1` IPv6-only; VLESS `9` dual-family/`1` IPv6-only; VMess `0` berhasil.
-- Policy: `rotate` tetap backward-compatible dan tidak dibatasi family; client yang membutuhkan family eksplisit memakai `ipv4` atau `ipv6`. VMess belum dinyatakan capability-eligible dari evidence ini.
+- VMess source provider diperbarui pada URL yang sama: snapshot terbaru `1.576` bytes, `6` node VMess parsed, `0` invalid; source ownership sementara `22` dan pool total `30` VMess karena retirement hysteresis. Config backup: `/var/backups/hopline/vmess-refresh-20261015T232319Z`.
+- Acceptance forced-route setelah health refresh: VMess IPv4 `2/3` berhasil HTTP 200, VMess IPv6 `2/3` berhasil HTTP 200. Satu node gagal IPv4 tetapi berhasil IPv6; dua node berhasil dual-family. Latency VMess sukses sekitar `0.9–6.4s`; hasil membuktikan provider update memulihkan sebagian node, bukan kestabilan permanen seluruh pool.
+- VMess health setelah refresh: total `30`, healthy `6`, degraded `15`, dead `5`, unknown `4`. Tidak ada perubahan parser/generator dibuat; failure yang tersisa diperlakukan sebagai node/provider runtime variability.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |
