@@ -18,6 +18,17 @@ function formatCheckedAt(value) {
   return new Date(value * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatUptime(value) {
+  if (!value) return "Not available";
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000 - value));
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days) return `${days}d ${hours}h`;
+  if (hours) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 async function getJson(path, signal) {
   const response = await fetch(path, { signal, headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`Control API returned HTTP ${response.status}`);
@@ -58,6 +69,9 @@ function App() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState("");
   const [actionResults, setActionResults] = useState({});
+  const [expandedNodes, setExpandedNodes] = useState(new Set());
+  const [subscriptions, setSubscriptions] = useState(null);
+  const [service, setService] = useState(null);
 
   async function nodeAction(nodeId, action) {
     setActionResults((prev) => ({ ...prev, [nodeId]: { ...prev[nodeId], [action]: "pending" } }));
@@ -81,10 +95,17 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const [nextStatus, nextNodes] = await Promise.all([getJson("/status", controller.signal), getJson("/nodes", controller.signal)]);
+      const [nextStatus, nextNodes, nextSubscriptions, nextService] = await Promise.all([
+        getJson("/status", controller.signal),
+        getJson("/nodes", controller.signal),
+        getJson("/subscriptions", controller.signal).catch(() => null),
+        getJson("/service", controller.signal).catch(() => null),
+      ]);
       if (controller.signal.aborted) return;
       setStatus(nextStatus);
       setNodes(nextNodes.nodes ?? []);
+      if (nextSubscriptions) setSubscriptions(nextSubscriptions);
+      if (nextService) setService(nextService);
       setLastUpdated(new Date());
     } catch (cause) {
       if (cause.name !== "AbortError" && !controller.signal.aborted) setError(cause.message || "Unable to reach the control API.");
@@ -122,6 +143,15 @@ function App() {
     }
   }
 
+  function toggleNode(nodeId) {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  }
+
   const protocols = useMemo(() => ["all", ...Object.keys(status?.protocols ?? {}).sort()], [status]);
   const filteredNodes = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -145,7 +175,7 @@ function App() {
       <main className="content">
         <section className="intro-row">
           <div><p className="kicker">Operations / runtime view</p><h1>Node control, without the noise.</h1><p className="lede">A compact view of the active egress pool, health signals, and routing inventory.</p></div>
-          <div className="runtime-note"><span className="status-dot" /> <div><strong>Control API</strong><span>{error ? "Connection unavailable" : "Connected on 127.0.0.1"}</span></div></div>
+          <div className="runtime-note"><span className="status-dot" /> <div><strong>Control API</strong><span>{error ? "Connection unavailable" : `:${service?.generation_port ?? "18772"} · ${service?.started_at ? formatUptime(service.started_at) : "running"}`}</span></div></div>
             {syncResult && <div className="sync-result">{syncResult}</div>}
         </section>
 
@@ -160,9 +190,33 @@ function App() {
 
         <section className="health-panel panel"><div className="section-heading"><div><p className="eyebrow">Pool health</p><h2>Current distribution</h2></div><span className="muted">{formatCount(healthTotal)} registered nodes</span></div><HealthBar health={status?.health} total={healthTotal} /><div className="legend">{HEALTH_STATES.map((state) => <span key={state}><i className={`legend-dot ${state}`} />{state}<b>{formatCount(status?.health?.[state])}</b></span>)}</div></section>
 
+        {subscriptions && subscriptions.subscriptions && subscriptions.subscriptions.length > 0 && <section className="subscriptions-panel panel"><div className="section-heading"><div><p className="eyebrow">Sources</p><h2>Subscriptions</h2></div><span className="muted">{formatCount(subscriptions.subscriptions.length)} source(s)</span></div><div className="table-wrap"><table className="sub-table"><thead><tr><th>Source</th><th>Scheme</th><th>Status</th><th>Nodes</th><th>Snapshot</th><th>Updated</th></tr></thead><tbody>{subscriptions.subscriptions.map((sub) => <tr key={sub.source}><td><span className="sub-source">{sub.source}</span></td><td><span className="protocol-tag">{sub.scheme}</span></td><td><span className={`health-tag ${sub.valid ? "healthy" : "dead"}`}><i />{sub.valid ? "valid" : "invalid"}</span></td><td><span className="source-count">{formatCount(sub.nodes)}</span></td><td className="mono">{sub.snapshot_hash ? sub.snapshot_hash.slice(0, 12) : ""}</td><td className="muted">{sub.updated_at ? new Date(sub.updated_at + "Z").toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : ""}</td></tr>)}</tbody></table></div></section>}
+
         <section className="nodes-panel panel"><div className="section-heading"><div><p className="eyebrow">Inventory</p><h2>Nodes</h2></div><span className="muted">Showing {formatCount(filteredNodes.length)} of {formatCount(nodes.length)}</span></div>
           <div className="filters"><label className="search-field"><span>Search</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ID, server, country" /></label><label><span>Protocol</span><select value={protocol} onChange={(event) => setProtocol(event.target.value)}>{protocols.map((item) => <option key={item} value={item}>{item === "all" ? "All protocols" : item.toUpperCase()}</option>)}</select></label><label><span>Health</span><select value={health} onChange={(event) => setHealth(event.target.value)}><option value="all">All states</option>{HEALTH_STATES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></div>
-          {loading && !nodes.length ? <div className="loading-state"><span className="skeleton wide" /><span className="skeleton" /><span className="skeleton" /></div> : filteredNodes.length ? <div className="table-wrap"><table><thead><tr><th>Node</th><th>Protocol</th><th>Health</th><th>Latency</th><th>Exit metadata</th><th>Last probe</th><th>Actions</th></tr></thead><tbody>{filteredNodes.map((node) => <tr key={node.id}><td><div className="node-cell"><strong>{node.name || node.id}</strong><span>{node.id} · {node.server}:{node.port}</span></div></td><td><span className="protocol-tag">{node.protocol}</span></td><td><span className={`health-tag ${node.health}`}><i />{node.health}</span></td><td className="mono">{formatLatency(node.latency_ms)}</td><td>{node.geolocation ? <div className="geo-cell"><strong>{node.geolocation.country_code}</strong><span>{node.geolocation.ip}</span></div> : <span className="muted">Not available</span>}</td><td className="muted">{formatCheckedAt(node.geolocation?.checked_at)}</td><td><div className="row-actions"><button className="action-btn" onClick={() => nodeAction(node.id, "probe")} disabled={actionResults[node.id]?.probe === "pending"}>Probe</button><button className="action-btn" onClick={() => nodeAction(node.id, "enable")} disabled={actionResults[node.id]?.enable === "pending"}>Enable</button><button className="action-btn danger" onClick={() => nodeAction(node.id, "disable")} disabled={actionResults[node.id]?.disable === "pending"}>Disable</button><span className="action-status">{actionResults[node.id]?.probe || actionResults[node.id]?.enable || actionResults[node.id]?.disable || ""}</span></div></td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>No nodes match these filters.</strong><span>Try clearing the search or selecting another health state.</span></div>}
+          {loading && !nodes.length ? <div className="loading-state"><span className="skeleton wide" /><span className="skeleton" /><span className="skeleton" /></div> : filteredNodes.length ? <div className="table-wrap"><table><thead><tr><th>Node</th><th>Protocol</th><th>Health</th><th>Latency</th><th>Exit metadata</th><th>Last probe</th><th>Actions</th></tr></thead><tbody>{filteredNodes.map((node) => {
+              const expanded = expandedNodes.has(node.id);
+              return <>
+                <tr key={node.id} className={expanded ? "expanded" : ""} onClick={() => toggleNode(node.id)}>
+                  <td><div className="node-cell"><strong>{node.name || node.id}</strong><span>{node.id} · {node.server}:{node.port}</span></div></td>
+                  <td><span className="protocol-tag">{node.protocol}</span></td>
+                  <td><span className={`health-tag ${node.health}`}><i />{node.health}</span></td>
+                  <td className="mono">{formatLatency(node.latency_ms)}</td>
+                  <td>{node.geolocation ? <div className="geo-cell"><strong>{node.geolocation.country_code}</strong><span>{node.geolocation.ip}</span></div> : <span className="muted">Not available</span>}</td>
+                  <td className="muted">{formatCheckedAt(node.geolocation?.checked_at)}</td>
+                  <td><div className="row-actions"><button className="action-btn" onClick={(e) => { e.stopPropagation(); nodeAction(node.id, "probe"); }} disabled={actionResults[node.id]?.probe === "pending"}>Probe</button><button className="action-btn" onClick={(e) => { e.stopPropagation(); nodeAction(node.id, "enable"); }} disabled={actionResults[node.id]?.enable === "pending"}>Enable</button><button className="action-btn danger" onClick={(e) => { e.stopPropagation(); nodeAction(node.id, "disable"); }} disabled={actionResults[node.id]?.disable === "pending"}>Disable</button><span className="action-status">{actionResults[node.id]?.probe || actionResults[node.id]?.enable || actionResults[node.id]?.disable || ""}</span></div></td>
+                </tr>
+                {expanded && <tr className="node-detail"><td colSpan={7}>
+                  <div className="node-detail-grid">
+                    {node.geolocation && <div className="node-detail-block"><strong>Geolocation</strong><span>{node.geolocation.country} ({node.geolocation.country_code})</span><span>ASN: {node.geolocation.asn || "—"}</span><span>Org: {node.geolocation.organization || "—"}</span><span>Provider: {node.geolocation.provider || "—"}</span><span>Exit IP: {node.geolocation.ip}</span><span>Checked: {formatCheckedAt(node.geolocation.checked_at)}</span></div>}
+                    <div className="node-detail-block"><strong>Capabilities</strong><div className="cap-list">{node.capabilities?.ipv4?.capable && <span className="cap-tag">IPv4</span>}{node.capabilities?.ipv6?.capable && <span className="cap-tag">IPv6</span>}{!node.capabilities?.ipv4?.capable && !node.capabilities?.ipv6?.capable && <span className="muted">None reported</span>}</div></div>
+                    {node.capabilities?.ipv4?.ip && <div className="node-detail-block"><strong>IPv4 Exit IP</strong><span>{node.capabilities.ipv4.ip}</span><span>Checked: {formatCheckedAt(node.capabilities.ipv4.checked_at)}</span>{node.capabilities.ipv4.last_error && <span className="muted">Error: {node.capabilities.ipv4.last_error}</span>}</div>}
+                    {node.capabilities?.ipv6?.ip && <div className="node-detail-block"><strong>IPv6 Exit IP</strong><span>{node.capabilities.ipv6.ip}</span><span>Checked: {formatCheckedAt(node.capabilities.ipv6.checked_at)}</span>{node.capabilities.ipv6.last_error && <span className="muted">Error: {node.capabilities.ipv6.last_error}</span>}</div>}
+                    <div className="node-detail-block"><strong>Stats</strong><span>Successes: {formatCount(node.successes)}</span><span>Failures: {formatCount(node.failures)}</span></div>
+                  </div>
+                </td></tr>}
+              </>;
+            })}</tbody></table></div> : <div className="empty-state"><strong>No nodes match these filters.</strong><span>Try clearing the search or selecting another health state.</span></div>}
         </section>
       </main>
       <footer><span>Hopline control panel</span><span>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Waiting for control API"}</span></footer>

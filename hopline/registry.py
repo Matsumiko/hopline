@@ -294,6 +294,19 @@ class SQLiteRegistry:
             (source,),
         ).fetchone()
 
+    def list_subscriptions(self):
+        return self.connection.execute(
+            "SELECT source, snapshot_hash, valid, updated_at FROM subscriptions ORDER BY source"
+        ).fetchall()
+
+    def list_source_counts(self) -> dict[str, int]:
+        return {
+            row[0]: row[1]
+            for row in self.connection.execute(
+                "SELECT source, COUNT(*) FROM node_sources GROUP BY source"
+            )
+        }
+
     def replace_subscription(
         self,
         source: str,

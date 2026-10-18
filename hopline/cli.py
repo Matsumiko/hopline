@@ -329,6 +329,15 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         results = await scheduler.sync_now()
         return [{"source": r.source, "changed": r.changed, "nodes": r.parsed_nodes} for r in results]
 
+    started_at = time.time()
+
+    async def runtime_info():
+        generation = engine.manager.active
+        return {
+            "generation_port": generation.port if generation else None,
+            "started_at": started_at,
+        }
+
     async def probe_node_now(node) -> dict[str, object]:
         from .probe import ProbeTarget, http_connect_probe, tcp_target_probe
 
@@ -369,6 +378,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         static_dir=config.webui_dir or None,
         sync_callback=on_sync,
         node_action_callback=handle_node_action,
+        runtime_callback=runtime_info,
     )
     probe_scheduler = None
     probe_task = None

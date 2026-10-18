@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import mimetypes
 from pathlib import Path
@@ -20,6 +21,7 @@ class ControlServer:
         static_dir: str | Path | None = None,
         sync_callback: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None,
         node_action_callback: Callable[[str, str], Awaitable[dict[str, Any]]] | None = None,
+        runtime_callback: Callable[[], Awaitable[dict[str, Any]]] | None = None,
     ) -> None:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("control API must bind to localhost")
@@ -29,6 +31,7 @@ class ControlServer:
         self.static_dir = Path(static_dir).resolve() if static_dir else None
         self._sync_callback = sync_callback
         self._node_action_callback = node_action_callback
+        self._runtime_callback = runtime_callback
         self.server: asyncio.AbstractServer | None = None
 
     @property
@@ -128,6 +131,33 @@ class ControlServer:
             )
         return result
 
+    def subscriptions(self) -> list[dict[str, Any]]:
+        counts = self.registry.list_source_counts()
+        result = []
+        for row in self.registry.list_subscriptions():
+            source = row["source"]
+            parsed = urlsplit(source)
+            digest = hashlib.sha256(source.encode()).hexdigest()[:10]
+            result.append({
+                "source": f"{parsed.hostname or 'static'}#{digest}",
+                "scheme": parsed.scheme or "static",
+                "valid": bool(row["valid"]),
+                "snapshot_hash": row["snapshot_hash"],
+                "updated_at": row["updated_at"],
+                "nodes": counts.get(source, 0),
+            })
+        return result
+
+    async def _handle_runtime(self, writer: asyncio.StreamWriter) -> None:
+        if self._runtime_callback is None:
+            await self._respond(writer, 501, {"error": "not_implemented"})
+            return
+        try:
+            info = await self._runtime_callback()
+            await self._respond(writer, 200, info)
+        except Exception as exc:
+            await self._respond(writer, 502, {"error": type(exc).__name__})
+
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             request = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)
@@ -145,6 +175,10 @@ class ControlServer:
                 await self._respond(writer, 200, self.status())
             elif path == "/nodes":
                 await self._respond(writer, 200, {"nodes": self.nodes()})
+            elif path == "/subscriptions":
+                await self._respond(writer, 200, {"subscriptions": self.subscriptions()})
+            elif path == "/service":
+                await self._handle_runtime(writer)
             elif self.static_dir is not None:
                 await self._respond_static(writer, path)
             else:

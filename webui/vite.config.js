@@ -7,6 +7,8 @@ export default defineConfig({
       "/status": "http://127.0.0.1:18772",
       "/nodes": "http://127.0.0.1:18772",
       "/sync": "http://127.0.0.1:18772",
+      "/subscriptions": "http://127.0.0.1:18772",
+      "/service": "http://127.0.0.1:18772",
     },
   },
   build: {
