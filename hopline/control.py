@@ -2,18 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
+from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from .health import HealthState
 
 
 class ControlServer:
-    def __init__(self, registry: SQLiteRegistry, *, host: str = "127.0.0.1", port: int = 18772) -> None:
+    def __init__(
+        self,
+        registry: SQLiteRegistry,
+        *,
+        host: str = "127.0.0.1",
+        port: int = 18772,
+        static_dir: str | Path | None = None,
+    ) -> None:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("control API must bind to localhost")
         self.registry = registry
         self.host = host
         self.requested_port = port
+        self.static_dir = Path(static_dir).resolve() if static_dir else None
         self.server: asyncio.AbstractServer | None = None
 
     @property
@@ -117,13 +128,16 @@ class ControlServer:
         try:
             request = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 2)
             line = request.split(b"\r\n", 1)[0].decode("ascii", "replace")
-            method, path, _version = line.split(" ", 2)
+            method, raw_path, _version = line.split(" ", 2)
+            path = urlsplit(raw_path).path
             if method != "GET":
                 await self._respond(writer, 405, {"error": "method_not_allowed"})
             elif path == "/status":
                 await self._respond(writer, 200, self.status())
             elif path == "/nodes":
                 await self._respond(writer, 200, {"nodes": self.nodes()})
+            elif self.static_dir is not None:
+                await self._respond_static(writer, path)
             else:
                 await self._respond(writer, 404, {"error": "not_found"})
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError):
@@ -131,6 +145,30 @@ class ControlServer:
         finally:
             writer.close()
             await writer.wait_closed()
+
+    async def _respond_static(self, writer: asyncio.StreamWriter, path: str) -> None:
+        if self.static_dir is None:
+            await self._respond(writer, 404, {"error": "not_found"})
+            return
+        relative = unquote(path).lstrip("/")
+        candidate = (self.static_dir / relative).resolve()
+        try:
+            candidate.relative_to(self.static_dir)
+        except ValueError:
+            await self._respond(writer, 404, {"error": "not_found"})
+            return
+        if not candidate.is_file():
+            candidate = self.static_dir / "index.html"
+        if not candidate.is_file():
+            await self._respond(writer, 404, {"error": "ui_not_built"})
+            return
+        body = await asyncio.to_thread(candidate.read_bytes)
+        content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
+        writer.write(
+            f"HTTP/1.1 200 OK\r\nContent-Type: {content_type}; charset=utf-8\r\n"
+            f"Content-Length: {len(body)}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".encode() + body
+        )
+        await writer.drain()
 
     @staticmethod
     async def _respond(writer: asyncio.StreamWriter, status: int, payload: dict[str, Any]) -> None:

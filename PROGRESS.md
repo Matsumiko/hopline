@@ -152,6 +152,9 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Deployment VPS production dari commit `9eb3e30` selesai ke `/opt/hopline/app`; backup rollback remote dibuat di `/var/backups/hopline/deploy-20261016T080549Z`; `/etc/hopline/hopline.toml` tidak diubah dan tetap mode `0600`. Service `hopline.service` restart dan tetap `active`.
 - Post-deploy VPS listeners: Gateway `18770`, Control `18772`, Metrics `18773`; journal pascarestart tidak memiliki `Traceback`, `IntegrityError`, `Task exception`, atau `ERROR`. `/status` merespons dengan `1.537` nodes: SS `506`, Trojan `502`, VLESS `521`, VMess `8`.
 - Boundary smoke valid auth menghasilkan `HTTP/1.1 200 Connection Established`; egress acceptance VPS `per_protocol=1` membuktikan SS dan VLESS HTTP 200, sedangkan sampel Trojan dan VMess gagal request. Missing/wrong auth menghasilkan HTTP `407`. Egress failure tetap node-level variability, bukan service crash.
+- React control panel v0.1 ditambahkan di `webui/`: overview health, protocol/country summary, node explorer, search/filter, loading/empty/error states, dan auto-refresh 30 detik. Control server tetap localhost-only dan hanya menyajikan static build saat `webui_dir` dikonfigurasi; response browser tetap non-secret.
+- Verifikasi panel: `npm run build` lulus; full discovery suite `106 tests — OK`; control API regression mencakup static serving dan path traversal. Browser smoke live memuat 1.862 node dari control API lokal dan filter node menghasilkan 1 hasil.
+- Catatan batas verifikasi: setelah workstation restart, service control lokal tidak aktif pada port `18772`, sehingga smoke live berikutnya tidak dijalankan ulang dan tidak ada deployment production untuk panel.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |
@@ -165,7 +168,7 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 ## Keputusan Terbuka
 
 - SOCKS5 tidak masuk scope awal; evaluasi setelah HTTP CONNECT stabil.
-- Dashboard web tidak diperlukan untuk baseline; CLI dan Prometheus menjadi default operasi.
+- Dashboard web baseline sekarang memiliki React control panel read-only untuk observability lokal; mutating operations dan public exposure tetap deferred.
 
 ## Format Pembaruan
 

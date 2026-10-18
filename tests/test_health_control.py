@@ -1,3 +1,5 @@
+import tempfile
+from pathlib import Path
 import asyncio
 import json
 import unittest
@@ -158,6 +160,36 @@ class HealthControlTests(unittest.TestCase):
                 await writer.wait_closed()
             finally:
                 await server.stop()
+
+        asyncio.run(scenario())
+
+    def test_control_api_serves_static_ui_and_blocks_path_traversal(self) -> None:
+        async def scenario() -> None:
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "dist"
+                root.mkdir()
+                (root / "index.html").write_text("<html>panel</html>", encoding="utf-8")
+                (Path(directory) / "secret.txt").write_text("secret", encoding="utf-8")
+                registry = SQLiteRegistry(":memory:")
+                server = ControlServer(registry, port=0, static_dir=root)
+                await server.start()
+                try:
+                    for path, expected in (("/", b"panel"), ("/../secret.txt", b"not_found")):
+                        reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                        writer.write(f"GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n".encode())
+                        await writer.drain()
+                        response = await reader.read()
+                        if path == "/":
+                            self.assertIn(b"HTTP/1.1 200 OK", response)
+                            self.assertIn(expected, response)
+                        else:
+                            self.assertIn(b"HTTP/1.1 404 Not Found", response)
+                            self.assertIn(expected, response)
+                        writer.close()
+                        await writer.wait_closed()
+                finally:
+                    await server.stop()
+                    registry.close()
 
         asyncio.run(scenario())
 
