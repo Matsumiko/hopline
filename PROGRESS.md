@@ -167,7 +167,7 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 | Country production belum terisi penuh | in progress | Auto-refresh mengikuti scheduler health dan langsung mengantrekan semua node eligible; mayoritas masih `unknown` karena route/provider dapat gagal | Biarkan queue berjalan dan pantau provider failure serta metadata stale |
 | Provider geolocation gratis memiliki rate limit dan perubahan response | open | Queue memakai concurrency health (`4` pada production saat verifikasi) dan fallback chain; provider `reallyfreegeoip` mengembalikan HTTP 403 saat direct smoke | Pantau error provider; turunkan concurrency bila provider mulai rate-limit |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
-| Node ditolak engine belum observable | open | Isolasi menyaring node tidak kompatibel tanpa log atau metric, sehingga subscription-wide problem bisa tersembunyi | Tambahkan counter atau log node ditolak saat publish generation |
+| Node ditolak engine belum observable | resolved | `apply_nodes` kini menulis log stderr dengan jumlah dan daftar node sing-box-incompatible; log muncul di journal saat ada node yang di-drop | Verifikasi berkelanjutan melalui journal |
 
 
 ## Keputusan Terbuka

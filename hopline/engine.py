@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import sys
 import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -89,6 +90,12 @@ class SingBoxEngine:
         accepted = {node.id for node in supported}
         self.accepted_node_ids = tuple(node.id for node in supported)
         self.rejected_node_ids = tuple(node.id for node in nodes if node.id not in accepted)
+        rejected = self.rejected_node_ids
+        if rejected:
+            preview = ", ".join(rejected[:5])
+            tail = f" and {len(rejected) - 5} more" if len(rejected) > 5 else ""
+            print(f"hopline: {len(rejected)} node(s) dropped (sing-box-incompatible): {preview}{tail}",
+                  file=sys.stderr)
         signature = tuple(
             (
                 node.id, node.protocol, node.server, node.port, node.uuid,
