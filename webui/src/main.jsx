@@ -55,6 +55,8 @@ function App() {
   const [health, setHealth] = useState("all");
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState("");
   async function refresh() {
     controllerRef.current?.abort();
     const controller = new AbortController();
@@ -87,6 +89,22 @@ function App() {
   }, []);
 
 
+  async function syncNow() {
+    setSyncing(true);
+    setSyncResult("");
+    try {
+      const response = await fetch("/sync", { method: "POST", headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`Control API returned HTTP ${response.status}`);
+      const payload = await response.json();
+      setSyncResult(`Synced ${payload.synced} source(s)`);
+      refresh();
+    } catch (cause) {
+      if (cause.name !== "AbortError") setSyncResult(`Sync failed: ${cause.message || "Unknown error"}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   const protocols = useMemo(() => ["all", ...Object.keys(status?.protocols ?? {}).sort()], [status]);
   const filteredNodes = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -104,13 +122,14 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-lockup"><span className="brand-mark">H</span><div><strong>hopline</strong><span>local egress control</span></div></div>
-        <div className="topbar-meta"><span className="live-dot" /> <span>localhost only</span><button className="refresh-button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh data"}</button></div>
+        <div className="topbar-meta"><span className="live-dot" /> <span>localhost only</span><button className="refresh-button" onClick={syncNow} disabled={syncing}>{syncing ? "Syncing" : "Sync now"}</button><button className="refresh-button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh data"}</button></div>
       </header>
 
       <main className="content">
         <section className="intro-row">
           <div><p className="kicker">Operations / runtime view</p><h1>Node control, without the noise.</h1><p className="lede">A compact view of the active egress pool, health signals, and routing inventory.</p></div>
           <div className="runtime-note"><span className="status-dot" /> <div><strong>Control API</strong><span>{error ? "Connection unavailable" : "Connected on 127.0.0.1"}</span></div></div>
+            {syncResult && <div className="sync-result">{syncResult}</div>}
         </section>
 
         {error && <section className="error-banner" role="alert"><strong>Panel cannot load live data.</strong><span>{error}</span><button onClick={refresh}>Try again</button></section>}

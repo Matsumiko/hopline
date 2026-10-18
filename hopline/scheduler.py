@@ -33,8 +33,16 @@ class SubscriptionScheduler:
         self.interval = interval
         self.jitter = jitter
         self._stop = asyncio.Event()
+        self._sync_lock = asyncio.Lock()
 
     async def sync_once(self) -> list[SyncResult]:
+        async with self._sync_lock:
+            return await self._sync_once_impl()
+
+    async def sync_now(self) -> list[SyncResult]:
+        return await self.sync_once()
+
+    async def _sync_once_impl(self) -> list[SyncResult]:
         results: list[SyncResult] = []
         completed = True
         for source in self.sources:

@@ -299,10 +299,6 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         port=config.metrics_port,
         probe_enabled=bool(config.probe_targets),
     ) if config.metrics_enabled else None
-    control = ControlServer(registry, port=config.control_port, static_dir=config.webui_dir or None)
-    probe_scheduler = None
-    probe_task = None
-
     def accepted_credentials(nodes) -> dict[str, str]:
         accepted = set(engine.accepted_node_ids)
         return {
@@ -328,6 +324,19 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         interval=config.interval,
         jitter=config.jitter,
     )
+
+    async def on_sync():
+        results = await scheduler.sync_now()
+        return [{"source": r.source, "changed": r.changed, "nodes": r.parsed_nodes} for r in results]
+
+    control = ControlServer(
+        registry,
+        port=config.control_port,
+        static_dir=config.webui_dir or None,
+        sync_callback=on_sync,
+    )
+    probe_scheduler = None
+    probe_task = None
     if metrics is not None:
         await metrics.start()
     await control.start()

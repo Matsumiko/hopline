@@ -193,6 +193,45 @@ class HealthControlTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_control_api_handles_sync_with_and_without_callback(self) -> None:
+        async def scenario() -> None:
+            async def fake_sync():
+                return [{"source": "fixture", "changed": True, "nodes": 3}]
+
+            # With callback
+            registry = SQLiteRegistry(":memory:")
+            server = ControlServer(registry, port=0, sync_callback=fake_sync)
+            await server.start()
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                writer.write(b"POST /sync HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n")
+                await writer.drain()
+                response = await reader.read()
+                self.assertIn(b"200 OK", response)
+                self.assertIn(b'"synced":1', response)
+                writer.close()
+                await writer.wait_closed()
+            finally:
+                await server.stop()
+                registry.close()
+
+            # Without callback
+            registry2 = SQLiteRegistry(":memory:")
+            server2 = ControlServer(registry2, port=0)
+            await server2.start()
+            try:
+                reader2, writer2 = await asyncio.open_connection("127.0.0.1", server2.port)
+                writer2.write(b"POST /sync HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n")
+                await writer2.drain()
+                response2 = await reader2.read()
+                self.assertIn(b"501 Not Implemented", response2)
+                writer2.close()
+                await writer2.wait_closed()
+            finally:
+                await server2.stop()
+                registry2.close()
+
+        asyncio.run(scenario())
 
 if __name__ == "__main__":
     unittest.main()

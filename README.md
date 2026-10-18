@@ -104,7 +104,7 @@ webui_dir = "/opt/hopline/app/webui/dist"
 
 Control API tetap localhost-only. Static panel dilayani dari control port yang sama, sehingga akses remote harus melalui SSH tunnel atau mekanisme akses lokal yang sudah disetujui; jangan bind control API ke internet.
 
-Panel menampilkan ringkasan health, protocol/country counts, filter node berdasarkan ID/server/country, serta metadata egress non-secret. Tombol operasi mutating dan subscription management belum tersedia.
+Panel menampilkan ringkasan health, protocol/country counts, filter node berdasarkan ID/server/country, serta metadata egress non-secret. Tombol "Sync now" memicu subscription refresh melalui `POST /sync` yang dijalankan daemon.
 Refresh subscription berjalan mengikuti `interval` dan `jitter`. Setiap source menyimpan snapshot valid terakhir, memakai ETag/Last-Modified bila tersedia, dan mempertahankan node lama saat fetch atau parse gagal. Node mendapat ID stabil dari parameter koneksi; node baru ditambahkan, node identik lintas source dideduplikasi, dan node yang hilang dari satu snapshot baru dilepas setelah tiga sync valid berturut-turut. Jika URL dihapus dari konfigurasi, source tersebut direkonsiliasi setelah satu siklus sync lengkap: snapshot dan node yang hanya dimiliki source itu dihapus, sedangkan node yang masih dimiliki source aktif tetap dipertahankan. Siklus yang terhenti sebelum semua source dicoba tidak melakukan retirement.
 Untuk affinity per sesi, gunakan username proxy `sticky-<sessionId>`, misalnya `sticky-job-42`. Binding hanya hidup di proses Gateway dan hilang saat restart; TTL diperpanjang ketika koneksi berhasil dipakai. `node-<id>` tetap forced tanpa fallback, sedangkan `rotate` tetap memilih ulang per koneksi.
 

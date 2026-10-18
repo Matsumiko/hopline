@@ -18,6 +18,7 @@ class ControlServer:
         host: str = "127.0.0.1",
         port: int = 18772,
         static_dir: str | Path | None = None,
+        sync_callback: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None,
     ) -> None:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("control API must bind to localhost")
@@ -25,6 +26,7 @@ class ControlServer:
         self.host = host
         self.requested_port = port
         self.static_dir = Path(static_dir).resolve() if static_dir else None
+        self._sync_callback = sync_callback
         self.server: asyncio.AbstractServer | None = None
 
     @property
@@ -130,7 +132,9 @@ class ControlServer:
             line = request.split(b"\r\n", 1)[0].decode("ascii", "replace")
             method, raw_path, _version = line.split(" ", 2)
             path = urlsplit(raw_path).path
-            if method != "GET":
+            if method == "POST" and path == "/sync":
+                await self._handle_sync(writer)
+            elif method != "GET":
                 await self._respond(writer, 405, {"error": "method_not_allowed"})
             elif path == "/status":
                 await self._respond(writer, 200, self.status())
@@ -145,6 +149,16 @@ class ControlServer:
         finally:
             writer.close()
             await writer.wait_closed()
+
+    async def _handle_sync(self, writer: asyncio.StreamWriter) -> None:
+        if self._sync_callback is None:
+            await self._respond(writer, 501, {"error": "not_implemented"})
+            return
+        try:
+            results = await self._sync_callback()
+            await self._respond(writer, 200, {"synced": len(results)})
+        except Exception as exc:
+            await self._respond(writer, 502, {"error": type(exc).__name__})
 
     async def _respond_static(self, writer: asyncio.StreamWriter, path: str) -> None:
         if self.static_dir is None:
@@ -173,7 +187,7 @@ class ControlServer:
     @staticmethod
     async def _respond(writer: asyncio.StreamWriter, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-        reason = {200: "OK", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed"}[status]
+        reason = {200: "OK", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 501: "Not Implemented", 502: "Bad Gateway"}[status]
         writer.write(
             f"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode() + body
         )
