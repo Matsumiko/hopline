@@ -1,4 +1,5 @@
 import asyncio
+import json
 import shutil
 import unittest
 
@@ -134,6 +135,62 @@ class SingBoxEngineTests(unittest.TestCase):
                 await engine.close()
                 target_server.close()
                 await target_server.wait_closed()
+
+        asyncio.run(scenario())
+
+    @unittest.skipUnless(shutil.which("sing-box"), "sing-box is required")
+    def test_apply_nodes_isolates_node_rejected_by_singbox(self) -> None:
+        async def scenario() -> None:
+            from hopline.models import Node
+
+            good = Node(
+                id="good",
+                protocol="vless",
+                server="127.0.0.1",
+                port=443,
+                uuid="00000000-0000-4000-8000-000000000001",
+            )
+            bad = Node(
+                id="bad",
+                protocol="ss",
+                server="127.0.0.1",
+                port=443,
+                uuid="secret",
+                method="definitely-not-a-cipher",
+            )
+            engine = SingBoxEngine(base_port=18975)
+            try:
+                generation = await engine.apply_nodes([good, bad])
+                self.assertEqual(engine.accepted_node_ids, ("good",))
+                self.assertEqual(engine.rejected_node_ids, ("bad",))
+                config = json.loads((engine._running[generation.label].directory / "config.json").read_text())
+                tags = {item["tag"] for item in config["outbounds"]}
+                self.assertIn("good", tags)
+                self.assertNotIn("bad", tags)
+            finally:
+                await engine.close()
+
+        asyncio.run(scenario())
+
+    @unittest.skipUnless(shutil.which("sing-box"), "sing-box is required")
+    def test_apply_nodes_raises_when_no_node_is_supported(self) -> None:
+        async def scenario() -> None:
+            from hopline.models import Node
+
+            bad = Node(
+                id="bad",
+                protocol="ss",
+                server="127.0.0.1",
+                port=443,
+                uuid="secret",
+                method="definitely-not-a-cipher",
+            )
+            engine = SingBoxEngine(base_port=18976)
+            try:
+                with self.assertRaises(ValueError):
+                    await engine.apply_nodes([bad])
+            finally:
+                await engine.close()
 
         asyncio.run(scenario())
 

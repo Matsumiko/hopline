@@ -40,10 +40,55 @@ class SingBoxEngine:
         self._next_generation = 0
         self._active_node_signature: tuple[tuple[object, ...], ...] | None = None
         self._running: dict[str, RunningGeneration] = {}
+        self.accepted_node_ids: tuple[str, ...] = ()
+        self.rejected_node_ids: tuple[str, ...] = ()
+
+    async def _config_check_passes(self, nodes: list[Node]) -> bool:
+        """Return whether sing-box accepts a config built from these nodes."""
+        if shutil.which(self.binary) is None:
+            raise FileNotFoundError(f"tunnel binary not found: {self.binary}")
+        config = build_config(nodes, listen_port=self.base_port)
+        with tempfile.TemporaryDirectory(prefix="hopline-check-") as directory:
+            config_path = Path(directory) / "config.json"
+            config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+            check = await asyncio.create_subprocess_exec(
+                self.binary,
+                "check",
+                "-c",
+                str(config_path),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await check.wait()
+            return check.returncode == 0
+
+    async def _supported_nodes(self, nodes: list[Node]) -> list[Node]:
+        """Keep the nodes sing-box accepts, isolating any single malformed entry."""
+        if not nodes:
+            return []
+        if await self._config_check_passes(nodes):
+            return nodes
+        if len(nodes) == 1:
+            return []
+        midpoint = len(nodes) // 2
+        left = await self._supported_nodes(nodes[:midpoint])
+        right = await self._supported_nodes(nodes[midpoint:])
+        return left + right
+
     async def apply_nodes(self, nodes: list[Node]) -> Generation:
-        """Publish a generation only when node connection parameters changed."""
+        """Publish a generation only when node connection parameters changed.
+
+        Nodes sing-box rejects are dropped so one malformed entry cannot fail the whole
+        generation.
+        """
         if not nodes:
             raise ValueError("at least one node is required")
+        supported = await self._supported_nodes(list(nodes))
+        if not supported:
+            raise ValueError("no sing-box-compatible node is available")
+        accepted = {node.id for node in supported}
+        self.accepted_node_ids = tuple(node.id for node in supported)
+        self.rejected_node_ids = tuple(node.id for node in nodes if node.id not in accepted)
         signature = tuple(
             (
                 node.id, node.protocol, node.server, node.port, node.uuid,
@@ -54,11 +99,11 @@ class SingBoxEngine:
                 node.fingerprint, node.alpn, node.allow_insecure, node.service_name,
                 node.header_type,
             )
-            for node in sorted(nodes, key=lambda item: item.id)
+            for node in sorted(supported, key=lambda item: item.id)
         )
         if signature == self._active_node_signature and self.manager.active is not None:
             return self.manager.active
-        config = build_config(nodes, listen_port=self.base_port)
+        config = build_config(supported, listen_port=self.base_port)
         previous = self.manager.active
         generation = await self.start_generation(config)
         self._active_node_signature = signature

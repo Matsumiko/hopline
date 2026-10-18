@@ -19,6 +19,7 @@ ADR menyimpan alasan keputusan yang memengaruhi boundary, dependency, lifecycle,
 | [ADR-008](008-subscription-source-retirement.md) | Retirement source subscription setelah sync lengkap dan preservation node shared | accepted untuk lifecycle subscription Fase 1 |
 | [ADR-009](009-country-metadata-refresh.md) | Refresh metadata country berdasarkan exit IP dengan batch terkontrol | accepted untuk country observability Fase 3 |
 | [ADR-010](010-node-ip-capability.md) | Capability egress IPv4/IPv6 per node, terpisah dari health | accepted untuk routing capability Fase 3 |
+| [ADR-011](011-node-compatibility-isolation.md) | Isolasi node tidak kompatibel sing-box dan normalisasi fingerprint uTLS | accepted untuk lifecycle engine Fase 1 |
 ## Aturan
 
 - Jangan mengubah keputusan accepted secara diam-diam; buat ADR baru jika keputusan berubah.

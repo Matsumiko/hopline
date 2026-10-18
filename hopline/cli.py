@@ -303,12 +303,20 @@ async def _run_daemon(config_path: str, once: bool) -> int:
     probe_scheduler = None
     probe_task = None
 
+    def accepted_credentials(nodes) -> dict[str, str]:
+        accepted = set(engine.accepted_node_ids)
+        return {
+            node.id: node.credential
+            for node in nodes
+            if not accepted or node.id in accepted
+        }
+
     def publish_generation(generation: Generation) -> None:
         if gateway is None:
             return
         gateway.publish_generation(
             generation.port,
-            {node.id: node.credential for node in registry.list_nodes()},
+            accepted_credentials(registry.list_nodes()),
         )
 
     scheduler = SubscriptionScheduler(
@@ -341,7 +349,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             host=config.gateway_host,
             port=config.gateway_port,
             generation_port=engine.manager.active.port,
-            generation_credentials={node.id: node.credential for node in nodes},
+            generation_credentials=accepted_credentials(nodes),
             health_state=lambda node_id: (record.state if (record := registry.health_record(node_id)) else None),
             health_available=health.is_available,
             country_metadata=lambda node_id: (

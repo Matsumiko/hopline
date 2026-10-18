@@ -86,6 +86,26 @@ class ParserConfigTests(unittest.TestCase):
         self.assertEqual(outbound["tls"]["utls"], {"enabled": True, "fingerprint": "chrome"})
         self.assertEqual(outbound["tls"]["alpn"], ["h2", "http/1.1"])
 
+    def test_unsupported_fingerprint_is_normalized_for_singbox(self) -> None:
+        plain = parse_vless(
+            "vless://00000000-0000-4000-8000-0000000000a1@edge.example.test:443"
+            "?security=tls&sni=edge.example.test&fp=unsafe"
+        )
+        plain_outbound = build_config([plain], listen_port=18771)["outbounds"][0]
+        self.assertNotIn("utls", plain_outbound["tls"])
+        reality = parse_vless(
+            "vless://00000000-0000-4000-8000-0000000000a2@edge.example.test:443"
+            "?security=reality&sni=real.example.test&pbk=public-key&sid=abcd&fp=unsafe"
+        )
+        reality_outbound = build_config([reality], listen_port=18771)["outbounds"][0]
+        self.assertEqual(reality_outbound["tls"]["utls"], {"enabled": True, "fingerprint": "chrome"})
+        supported = parse_vless(
+            "vless://00000000-0000-4000-8000-0000000000a3@edge.example.test:443"
+            "?security=tls&sni=edge.example.test&fp=FireFox"
+        )
+        supported_outbound = build_config([supported], listen_port=18771)["outbounds"][0]
+        self.assertEqual(supported_outbound["tls"]["utls"], {"enabled": True, "fingerprint": "firefox"})
+
     def test_websocket_early_data_and_h2_mapping(self) -> None:
         node = parse_share_link(
             "vmess://00000000-0000-4000-8000-000000000008@edge.example.test:443"

@@ -155,6 +155,10 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - React control panel v0.1 ditambahkan di `webui/`: overview health, protocol/country summary, node explorer, search/filter, loading/empty/error states, dan auto-refresh 30 detik. Control server tetap localhost-only dan hanya menyajikan static build saat `webui_dir` dikonfigurasi; response browser tetap non-secret.
 - Verifikasi panel: `npm run build` lulus; full discovery suite `106 tests — OK`; control API regression mencakup static serving dan path traversal. Browser smoke live memuat 1.862 node dari control API lokal dan filter node menghasilkan 1 hasil.
 - Catatan batas verifikasi: setelah workstation restart, service control lokal tidak aktif pada port `18772`, sehingga smoke live berikutnya tidak dijalankan ulang dan tidak ada deployment production untuk panel.
+- Insiden production PC lokal 2026-10-18: `hopline.service` crash-loop dengan restart counter >400; gateway `18770` dan tunnel generation tidak pernah bind karena `sing-box config rejected: unknown uTLS fingerprint: unsafe`. Akar masalah: parser meneruskan flag provider `fp=unsafe` apa adanya ke `tls.utls.fingerprint`, dan satu node invalid menumbangkan seluruh config.
+- Perbaikan: normalisasi fingerprint uTLS di generator (nilai unsupported seperti `unsafe` dihilangkan pada node non-Reality, dipetakan ke `chrome` pada Reality) dan isolasi node tidak kompatibel di engine (`apply_nodes` menyaring via bisection; node ditolak tidak masuk credential/picker gateway). Dicatat sebagai ADR-011.
+- Bukti perbaikan: config dengan `fingerprint=unsafe` kini lolos `sing-box check` dengan `rc=0` tanpa `utls`; full discovery suite `109 tests — OK`; regression mencakup normalisasi fingerprint dan isolasi engine (node ditolak tidak muncul di config, set seluruhnya invalid gagal eksplisit).
+- Deploy production PC lokal: backup app dan config di `/var/backups/hopline/app-20261018T031811Z`; service `active` tanpa error journal pascarestart; listener Gateway `18770`, Control `18772`, Metrics `18773`, dan generation aktif `18774`; egress valid auth `HTTP 200` dengan exit IP node `101.32.239.42`; missing/wrong auth `HTTP 407`; `/status` melaporkan `1.880` node dengan health bergerak kembali ke `healthy 60 / degraded 15 / dead 37 / unknown 1768`.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |
@@ -163,6 +167,7 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 | Country production belum terisi penuh | in progress | Auto-refresh mengikuti scheduler health dan langsung mengantrekan semua node eligible; mayoritas masih `unknown` karena route/provider dapat gagal | Biarkan queue berjalan dan pantau provider failure serta metadata stale |
 | Provider geolocation gratis memiliki rate limit dan perubahan response | open | Queue memakai concurrency health (`4` pada production saat verifikasi) dan fallback chain; provider `reallyfreegeoip` mengembalikan HTTP 403 saat direct smoke | Pantau error provider; turunkan concurrency bila provider mulai rate-limit |
 | Metrics retention dan scrape owner belum ditetapkan | deferred | Endpoint tersedia tetapi policy operasi belum final | Tetapkan Prometheus scrape/retention sebelum production |
+| Node ditolak engine belum observable | open | Isolasi menyaring node tidak kompatibel tanpa log atau metric, sehingga subscription-wide problem bisa tersembunyi | Tambahkan counter atau log node ditolak saat publish generation |
 
 
 ## Keputusan Terbuka

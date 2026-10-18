@@ -4,6 +4,24 @@ from typing import Any
 
 from .models import Node
 
+UTLS_FINGERPRINTS = frozenset(
+    {"chrome", "firefox", "safari", "ios", "android", "edge", "360", "qq", "random", "randomized"}
+)
+
+
+def normalize_fingerprint(value: str | None, *, reality: bool = False) -> str | None:
+    """Map a provider fingerprint onto a uTLS profile sing-box accepts.
+
+    Providers reuse v2ray flags such as ``unsafe`` that sing-box rejects as an unknown
+    fingerprint. Unsupported values fall back to the default profile, or to no uTLS at
+    all when the node does not require Reality.
+    """
+    if value:
+        candidate = value.strip().lower()
+        if candidate in UTLS_FINGERPRINTS:
+            return candidate
+    return "chrome" if reality else None
+
 
 def _outbound(node: Node) -> dict[str, Any]:
     outbound_type = "shadowsocks" if node.protocol == "ss" else node.protocol
@@ -57,7 +75,7 @@ def _outbound(node: Node) -> dict[str, Any]:
                 "public_key": node.reality_pbk,
                 **({"short_id": node.reality_sid.split(",")[0]} if node.reality_sid else {}),
             }
-        fingerprint = node.fingerprint or ("chrome" if node.reality_pbk else None)
+        fingerprint = normalize_fingerprint(node.fingerprint, reality=bool(node.reality_pbk))
         if fingerprint:
             tls["utls"] = {"enabled": True, "fingerprint": fingerprint}
         outbound["tls"] = tls
