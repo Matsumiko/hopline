@@ -22,6 +22,7 @@ class ControlServer:
         sync_callback: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None,
         node_action_callback: Callable[[str, str], Awaitable[dict[str, Any]]] | None = None,
         runtime_callback: Callable[[], Awaitable[dict[str, Any]]] | None = None,
+        subscription_callback: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]] | None = None,
     ) -> None:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("control API must bind to localhost")
@@ -32,6 +33,7 @@ class ControlServer:
         self._sync_callback = sync_callback
         self._node_action_callback = node_action_callback
         self._runtime_callback = runtime_callback
+        self._subscription_callback = subscription_callback
         self.server: asyncio.AbstractServer | None = None
 
     @property
@@ -133,18 +135,47 @@ class ControlServer:
 
     def subscriptions(self) -> list[dict[str, Any]]:
         counts = self.registry.list_source_counts()
+        managed = set(self.registry.list_managed_subscriptions())
+        removed = set(self.registry.list_removed_subscriptions())
+        seen: set[str] = set()
         result = []
+
+        def redacted(url: str) -> str:
+            parsed = urlsplit(url)
+            digest = hashlib.sha256(url.encode()).hexdigest()[:10]
+            return f"{parsed.hostname or 'static'}#{digest}"
+
         for row in self.registry.list_subscriptions():
             source = row["source"]
+            if source in removed:
+                continue
+            seen.add(source)
             parsed = urlsplit(source)
             digest = hashlib.sha256(source.encode()).hexdigest()[:10]
             result.append({
-                "source": f"{parsed.hostname or 'static'}#{digest}",
+                "digest": digest,
+                "source": redacted(source),
                 "scheme": parsed.scheme or "static",
+                "managed": source in managed,
                 "valid": bool(row["valid"]),
                 "snapshot_hash": row["snapshot_hash"],
                 "updated_at": row["updated_at"],
                 "nodes": counts.get(source, 0),
+            })
+        for url in self.registry.list_managed_subscriptions():
+            if url in seen or url in removed:
+                continue
+            parsed = urlsplit(url)
+            digest = hashlib.sha256(url.encode()).hexdigest()[:10]
+            result.append({
+                "digest": digest,
+                "source": redacted(url),
+                "scheme": parsed.scheme or "static",
+                "managed": True,
+                "valid": False,
+                "snapshot_hash": None,
+                "updated_at": None,
+                "nodes": 0,
             })
         return result
 
@@ -166,6 +197,8 @@ class ControlServer:
             path = urlsplit(raw_path).path
             if method == "POST" and path == "/sync":
                 await self._handle_sync(writer)
+            elif method == "POST" and path in {"/subscriptions/add", "/subscriptions/delete"}:
+                await self._handle_subscription(writer, reader, request, path)
             elif self._match_node_action(method, path) is not None:
                 node_id, action = self._match_node_action(method, path)
                 await self._handle_node_action(writer, node_id, action)
@@ -188,6 +221,38 @@ class ControlServer:
         finally:
             writer.close()
             await writer.wait_closed()
+
+    @staticmethod
+    def _content_length(request: bytes) -> int:
+        for header in request.split(b"\r\n")[1:]:
+            if b":" in header:
+                key, value = header.split(b":", 1)
+                if key.strip().lower() == b"content-length":
+                    try:
+                        return int(value.strip())
+                    except ValueError:
+                        return 0
+        return 0
+
+    async def _handle_subscription(self, writer: asyncio.StreamWriter, reader: asyncio.StreamReader, request: bytes, path: str) -> None:
+        if self._subscription_callback is None:
+            await self._respond(writer, 501, {"error": "not_implemented"})
+            return
+        length = self._content_length(request)
+        body = await asyncio.wait_for(reader.readexactly(length), 2) if length else b""
+        try:
+            payload = json.loads(body.decode("utf-8")) if body else {}
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            await self._respond(writer, 400, {"error": "bad_request"})
+            return
+        action = "add" if path.endswith("/add") else "delete"
+        try:
+            result = await self._subscription_callback(action, payload)
+            await self._respond(writer, 200, result)
+        except ValueError as exc:
+            await self._respond(writer, 404, {"error": str(exc)})
+        except Exception as exc:
+            await self._respond(writer, 502, {"error": type(exc).__name__})
 
     async def _handle_sync(self, writer: asyncio.StreamWriter) -> None:
         if self._sync_callback is None:

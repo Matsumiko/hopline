@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import shutil
@@ -372,6 +373,32 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             return await probe_node_now(node)
         raise ValueError("unknown_action")
 
+    async def handle_subscription(action: str, payload: dict) -> dict[str, object]:
+        if action == "add":
+            url = str(payload.get("url", "")).strip()
+            parsed = urlsplit(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise ValueError("invalid_subscription_url")
+            if parsed.username or parsed.password:
+                raise ValueError("subscription_url_must_not_contain_credentials")
+            registry.add_managed_subscription(url)
+            asyncio.create_task(scheduler.sync_now())
+            return {"action": "add", "digest": hashlib.sha256(url.encode()).hexdigest()[:10]}
+        if action == "delete":
+            digest = str(payload.get("digest", "")).strip()
+            candidates = list(config.subscriptions) + list(registry.list_managed_subscriptions())
+            target = None
+            for candidate in candidates:
+                if hashlib.sha256(candidate.encode()).hexdigest()[:10] == digest:
+                    target = candidate
+                    break
+            if target is None:
+                raise ValueError("subscription_not_found")
+            registry.remove_subscription(target)
+            asyncio.create_task(scheduler.sync_now())
+            return {"action": "delete", "digest": digest}
+        raise ValueError("unknown_action")
+
     control = ControlServer(
         registry,
         port=config.control_port,
@@ -379,6 +406,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         sync_callback=on_sync,
         node_action_callback=handle_node_action,
         runtime_callback=runtime_info,
+        subscription_callback=handle_subscription,
     )
     probe_scheduler = None
     probe_task = None

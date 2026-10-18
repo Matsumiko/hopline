@@ -110,6 +110,14 @@ class SQLiteRegistry:
                 last_error TEXT,
                 PRIMARY KEY(node_id, family)
             );
+            CREATE TABLE IF NOT EXISTS managed_subscriptions (
+                url TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS removed_subscriptions (
+                url TEXT PRIMARY KEY,
+                removed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         self._ensure_columns()
@@ -306,6 +314,32 @@ class SQLiteRegistry:
                 "SELECT source, COUNT(*) FROM node_sources GROUP BY source"
             )
         }
+
+    # -- panel-managed subscription sources --
+
+    def list_managed_subscriptions(self) -> list[str]:
+        return [
+            row[0]
+            for row in self.connection.execute(
+                "SELECT url FROM managed_subscriptions ORDER BY created_at"
+            )
+        ]
+
+    def list_removed_subscriptions(self) -> list[str]:
+        return [
+            row[0]
+            for row in self.connection.execute("SELECT url FROM removed_subscriptions")
+        ]
+
+    def add_managed_subscription(self, url: str) -> None:
+        with self.connection:
+            self.connection.execute("INSERT OR IGNORE INTO managed_subscriptions(url) VALUES (?)", (url,))
+            self.connection.execute("DELETE FROM removed_subscriptions WHERE url = ?", (url,))
+
+    def remove_subscription(self, url: str) -> None:
+        with self.connection:
+            self.connection.execute("DELETE FROM managed_subscriptions WHERE url = ?", (url,))
+            self.connection.execute("INSERT OR IGNORE INTO removed_subscriptions(url) VALUES (?)", (url,))
 
     def replace_subscription(
         self,

@@ -45,7 +45,13 @@ class SubscriptionScheduler:
     async def _sync_once_impl(self) -> list[SyncResult]:
         results: list[SyncResult] = []
         completed = True
-        for source in self.sources:
+        registry = getattr(self.syncer, "registry", None)
+        removed = set(self.syncer.registry.list_removed_subscriptions()) if registry is not None else set()
+        managed = set(self.syncer.registry.list_managed_subscriptions()) if registry is not None else set()
+        sources = tuple(dict.fromkeys(
+            [source for source in self.sources if source not in removed] + list(managed - removed)
+        ))
+        for source in sources:
             if self._stop.is_set():
                 completed = False
                 break
@@ -70,7 +76,7 @@ class SubscriptionScheduler:
         registry = getattr(self.syncer, "registry", None)
         if completed and registry is not None:
             before = registry.snapshot_ids() if self.engine is not None else ()
-            registry.reconcile_subscription_sources(self.sources)
+            registry.reconcile_subscription_sources(sources)
             if self.engine is not None and before != registry.snapshot_ids():
                 nodes = registry.list_nodes()
                 if nodes:

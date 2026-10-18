@@ -34,7 +34,11 @@ class SchedulerCliTests(unittest.TestCase):
 
     def test_scheduler_does_not_retire_sources_after_partial_cycle(self) -> None:
         syncer = type("FakeSyncer", (), {})()
-        syncer.registry = type("FakeRegistry", (), {"reconcile_subscription_sources": lambda self, sources: (_ for _ in ()).throw(AssertionError("partial cycle retired sources"))})()
+        syncer.registry = type("FakeRegistry", (), {
+            "reconcile_subscription_sources": lambda self, sources: (_ for _ in ()).throw(AssertionError("partial cycle retired sources")),
+            "list_removed_subscriptions": lambda self: [],
+            "list_managed_subscriptions": lambda self: [],
+        })()
         syncer.sync_url = AsyncMock(side_effect=lambda source: (scheduler.stop(), SyncResult(source, True, 1, 0, False))[1])
         scheduler = SubscriptionScheduler(syncer, ["one", "two"], interval=10, jitter=0)
 

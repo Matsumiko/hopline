@@ -233,7 +233,7 @@ class HealthControlTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
-def test_control_api_dispatches_node_actions(self) -> None:
+    def test_control_api_dispatches_node_actions(self) -> None:
         async def scenario() -> None:
             registry = SQLiteRegistry(":memory:")
             registry.replace_subscription("fixture", "hash", [Node("node-a", "vless", "a.test", 443, "secret")])
@@ -255,6 +255,46 @@ def test_control_api_dispatches_node_actions(self) -> None:
                     writer.close()
                     await writer.wait_closed()
                 self.assertEqual(seen, [("node-a", "disable"), ("node-a", "enable"), ("node-a", "probe")])
+            finally:
+                await server.stop()
+                registry.close()
+
+        asyncio.run(scenario())
+
+    def test_subscriptions_marks_managed_and_dispatches_add_delete(self) -> None:
+        async def scenario() -> None:
+            registry = SQLiteRegistry(":memory:")
+            registry.replace_subscription("https://config.test/sub", "hash", [Node("a", "vless", "a.test", 443, "secret")])
+            registry.add_managed_subscription("https://managed.test/sub")
+            seen = []
+
+            async def sub_callback(action, payload):
+                seen.append((action, payload))
+                return {"action": action, "ok": True}
+
+            server = ControlServer(registry, port=0, subscription_callback=sub_callback)
+            await server.start()
+            try:
+                listing = server.subscriptions()
+                managed_sources = [item for item in listing if item["managed"]]
+                self.assertEqual(len(managed_sources), 1)
+                self.assertTrue(managed_sources[0]["source"].startswith("managed.test#"))
+
+                for action, payload in (("add", b'{"url":"https://new.test/sub"}'), ("delete", b'{"digest":"aaaaaaaaaa"}')):
+                    length = len(payload)
+                    reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                    writer.write(
+                        f"POST /subscriptions/{action} HTTP/1.1\r\nHost: localhost\r\n"
+                        f"Content-Length: {length}\r\nContent-Type: application/json\r\n\r\n".encode() + payload
+                    )
+                    await writer.drain()
+                    response = await reader.read()
+                    self.assertIn(b"HTTP/1.1 200 OK", response)
+                    writer.close()
+                    await writer.wait_closed()
+                self.assertEqual([item[0] for item in seen], ["add", "delete"])
+                self.assertEqual(seen[0][1], {"url": "https://new.test/sub"})
+                self.assertEqual(seen[1][1], {"digest": "aaaaaaaaaa"})
             finally:
                 await server.stop()
                 registry.close()
