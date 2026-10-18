@@ -318,7 +318,23 @@ metrics_host = "127.0.0.1"
 metrics_port = 18773
 ```
 
-Endpoint `GET http://127.0.0.1:18773/metrics` hanya bind localhost dan menyediakan node count, health-state count, serta status active probe. Label dibatasi pada enum health state; server tidak mengekspos host, port, node ID, URL, atau credential.
+Endpoint `GET http://127.0.0.1:18773/metrics` hanya bind localhost dan menyediakan node count, health-state count, per-protocol node count, serta status active probe. Label dibatasi pada enum health state dan protocol; server tidak mengekspos host, port, node ID, URL, atau credential.
+
+Scrape dan retention dimiliki Prometheus eksternal; Hopline hanya mengekspos gauge current-state dan tidak menyimpan time-series sendiri. Contoh job untuk satu VPS:
+
+```yaml
+scrape_configs:
+  - job_name: hopline
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["127.0.0.1:18773"]
+```
+
+```bash
+prometheus --storage.tsdb.retention.time=15d
+```
+
+Lihat ADR-012 untuk batas cardinality dan kebijakan retention.
 
 ## Batasan
 

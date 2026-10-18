@@ -14,6 +14,7 @@ class MetricsTests(unittest.TestCase):
         body = MetricsServer(registry, probe_enabled=True).render().decode()
         self.assertIn('hopline_nodes 1', body)
         self.assertIn('hopline_active_probe_enabled 1', body)
+        self.assertIn('hopline_protocol_nodes{protocol="vless"} 1', body)
         self.assertNotIn("secret", body)
         self.assertNotIn("edge.test", body)
         registry.close()

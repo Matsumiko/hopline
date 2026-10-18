@@ -47,6 +47,9 @@ class MetricsServer:
         counts = {state.value: 0 for state in HealthState}
         for record in records:
             counts[record.state.value] += 1
+        protocols: dict[str, int] = {}
+        for node in nodes:
+            protocols[node.protocol] = protocols.get(node.protocol, 0) + 1
         lines = [
             "# HELP hopline_nodes Number of nodes in the registry.",
             "# TYPE hopline_nodes gauge",
@@ -55,6 +58,14 @@ class MetricsServer:
             "# TYPE hopline_health_nodes gauge",
         ]
         lines.extend(f'hopline_health_nodes{{state="{state}"}} {counts[state]}' for state in counts)
+        lines.extend([
+            "# HELP hopline_protocol_nodes Number of nodes by protocol.",
+            "# TYPE hopline_protocol_nodes gauge",
+        ])
+        lines.extend(
+            f'hopline_protocol_nodes{{protocol="{protocol}"}} {count}'
+            for protocol, count in sorted(protocols.items())
+        )
         lines.extend([
             "# HELP hopline_active_probe_enabled Whether active probing is configured.",
             "# TYPE hopline_active_probe_enabled gauge",
