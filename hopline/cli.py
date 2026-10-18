@@ -329,11 +329,46 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         results = await scheduler.sync_now()
         return [{"source": r.source, "changed": r.changed, "nodes": r.parsed_nodes} for r in results]
 
+    async def probe_node_now(node) -> dict[str, object]:
+        from .probe import ProbeTarget, http_connect_probe, tcp_target_probe
+
+        if not config.probe_targets:
+            raise RuntimeError("probe_not_configured")
+        generation = engine.manager.active
+        if generation is None:
+            raise RuntimeError("no_active_generation")
+        target = ProbeTarget(config.probe_targets[0])
+        if config.probe_mode == "http":
+            ok = await http_connect_probe(
+                node, target,
+                proxy_host=config.probe_proxy_host,
+                proxy_port=generation.port,
+            )
+        else:
+            ok = await tcp_target_probe(node, target)
+        record = health.record_success(node.id) if ok else health.record_failure(node.id, "manual_probe_returned_false")
+        return {"node_id": node.id, "action": "probe", "ok": ok, "state": record.state.value}
+
+    async def handle_node_action(node_id: str, action: str) -> dict[str, object]:
+        node = next((n for n in registry.list_nodes() if n.id == node_id), None)
+        if node is None:
+            raise ValueError("node_not_found")
+        if action == "disable":
+            record = health.quarantine(node_id)
+            return {"node_id": node_id, "action": "disable", "state": record.state.value}
+        if action == "enable":
+            record = health.enable(node_id)
+            return {"node_id": node_id, "action": "enable", "state": record.state.value if record else "unknown"}
+        if action == "probe":
+            return await probe_node_now(node)
+        raise ValueError("unknown_action")
+
     control = ControlServer(
         registry,
         port=config.control_port,
         static_dir=config.webui_dir or None,
         sync_callback=on_sync,
+        node_action_callback=handle_node_action,
     )
     probe_scheduler = None
     probe_task = None

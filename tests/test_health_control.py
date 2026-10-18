@@ -233,5 +233,33 @@ class HealthControlTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+def test_control_api_dispatches_node_actions(self) -> None:
+        async def scenario() -> None:
+            registry = SQLiteRegistry(":memory:")
+            registry.replace_subscription("fixture", "hash", [Node("node-a", "vless", "a.test", 443, "secret")])
+            seen = []
+
+            async def action(node_id, action_name):
+                seen.append((node_id, action_name))
+                return {"node_id": node_id, "action": action_name, "state": "quarantine"}
+
+            server = ControlServer(registry, port=0, node_action_callback=action)
+            await server.start()
+            try:
+                for name in ("disable", "enable", "probe"):
+                    reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                    writer.write(f"POST /nodes/node-a/{name} HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n".encode())
+                    await writer.drain()
+                    response = await reader.read()
+                    self.assertIn(b"200 OK", response)
+                    writer.close()
+                    await writer.wait_closed()
+                self.assertEqual(seen, [("node-a", "disable"), ("node-a", "enable"), ("node-a", "probe")])
+            finally:
+                await server.stop()
+                registry.close()
+
+        asyncio.run(scenario())
+
 if __name__ == "__main__":
     unittest.main()

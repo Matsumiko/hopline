@@ -43,6 +43,13 @@ h1 { max-width: 660px; margin-bottom: 14px; font-size: clamp(34px, 5vw, 64px); l
 .runtime-note strong { font-size: 13px; }
 .runtime-note span:last-child { color: var(--muted); font-size: 12px; }
 .sync-result { margin-top: 12px; padding: 8px 14px; background: rgb(127 198 155 / .08); border: 1px solid rgb(127 198 155 / .3); color: var(--green); font-size: 12px; }
+.row-actions { display: flex; align-items: center; gap: 6px; }
+.action-btn { padding: 5px 8px; font-size: 11px; color: var(--text); background: transparent; border: 1px solid var(--border); }
+.action-btn:hover { border-color: var(--accent); color: var(--accent); }
+.action-btn.danger { color: var(--red); }
+.action-btn.danger:hover { border-color: var(--red); color: var(--red); }
+.action-btn:disabled { opacity: .5; cursor: wait; }
+.action-status { color: var(--muted); font-size: 10px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .error-banner { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: rgb(219 124 113 / .09); border: 1px solid rgb(219 124 113 / .4); color: #f1b0a8; margin-bottom: 20px; font-size: 13px; }
 .error-banner span { color: var(--muted); flex: 1; }
 .error-banner button { color: var(--text); background: transparent; border: 1px solid var(--border); padding: 6px 10px; }

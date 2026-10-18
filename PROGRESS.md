@@ -3,8 +3,9 @@
 ## Status Baseline
 
 - **Status:** `in progress`
-- **Fase aktif:** Fase 1 — Vertical slice MVP; gate production masih terbuka
+- **Fase aktif:** Fase 1 — Vertical slice MVP; gate production sudah ditutup 2026-10-18
 - **Baseline:** package runtime Hopline, generation lifecycle, gateway CONNECT, health-aware picker/failover pre-byte, active probe scheduler, HTTP-over-CONNECT probe mode, per-node active connection limit, load/acceptance harness, optional localhost Prometheus metrics, Linux installation runbook, hardened systemd unit, multi-protocol/structured parser, config generator, HTTP fetcher, bounded Syncer snapshot, SQLite registry dengan hysteresis, scheduler, CLI, persistent config, health registry, localhost control API, serta daemon wiring engine/gateway tersedia; staging runtime lulus dengan subscription nyata dan sing-box system-wide.
+- Gate F1 ditutup: seluruh kriteria (IP egress node, forced node, 503 pool kosong, generation publish/drain, sync no-change no-reload, secret redaction, active-stream preservation) terpenuhi dan terbukti di production local + 110 regression test + acceptance dual-stack.
 - **Production validation scope:** seluruh test/deployment/smoke default wajib memakai systemd production PC lokal pada `127.0.0.1:18770-18773`. Host lain tidak termasuk scope dan tidak boleh disentuh tanpa permintaan eksplisit user pada pesan yang sama.
 - **Subscription cutover on this PC:** old provider URL was removed from production config and registry. The active config contains four private subscription sources with protocol/country filters. Subscription keys and provider hostnames are not printed or committed.
 - Clean cutover cleared the old registry before restart. Production now has 631 nodes: 203 SS, 205 Trojan, 215 VLESS, and 8 VMess. Schema is 2; active HTTP probe is enabled. Health progressed to 145 healthy, 58 degraded, 428 unknown while the 631-node probe queue was still running.
@@ -162,6 +163,8 @@ Validasi sesi ini: full discovery suite menjalankan 87 test dengan `python3 -W e
 - Deploy production PC lokal: backup app dan config di `/var/backups/hopline/app-20261018T031811Z`; service `active` tanpa error journal pascarestart; listener Gateway `18770`, Control `18772`, Metrics `18773`, dan generation aktif `18774`; egress valid auth `HTTP 200` dengan exit IP node `101.32.239.42`; missing/wrong auth `HTTP 407`; `/status` melaporkan `1.880` node dengan health bergerak kembali ke `healthy 60 / degraded 15 / dead 37 / unknown 1768`.
 - Acceptance dual-stack Gate F1 (5 sampel/protokol, forced route): IPv4 `api4.ipify.org` menghasilkan SS `3/5`, Trojan `4/5`, VLESS `3/5`, VMess `4/5` (total `14/20`); IPv6 `api6.ipify.org` menghasilkan SS `5/5`, Trojan `5/5`, VLESS `4/5`, VMess `1/5` (total `15/20`). Kedua family berfungsi lintas protokol; kegagalan per-node adalah variability node, bukan cacat routing/parser/generator.
 - Kesimpulan policy IPv4/IPv6: pool membutuhkan keduanya. SS/Trojan/VLESS dual-stack kuat, sedangkan VMess IPv6 tipis (`1/5`) karena sumber VMess IPv6 masih sedikit; klien yang butuh IPv6 sebaiknya bergantung pada SS/Trojan/VLESS sampai sumber VMess IPv6 bertambah.
+- Node actions `POST /nodes/{id}/{probe|enable|disable}` diterapkan: control API meneruskan ke daemon melalui `node_action_callback`; disable = kuarantin (`health.quarantine`), enable = reset eligibility (`health.enable` ke DEGRADED), probe = satu putaran aktif probe terhadap target `[health].targets[0]`. Panel React kini menampilkan tombol Probe/Enable/Disable per baris dengan status inline.
+- Bukti production: disable node healthy → quarantine; enable → degraded; probe node → ok=true state=healthy. Full suite `110 tests — OK`.
 ## Blocker / Risiko Aktif
 
 | Risiko | Status | Bukti/kondisi | Next action |

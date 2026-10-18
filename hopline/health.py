@@ -96,6 +96,14 @@ class HealthChecker:
             consecutive_successes=0,
         )
 
+    def enable(self, node_id: str) -> HealthRecord | None:
+        """Remove a manual quarantine so the node rejoins the candidate pool."""
+        return self.registry.save_health(
+            node_id, HealthState.DEGRADED, 0, 0, None, None,
+            cooldown_until=0.0, probe_after=0.0,
+            consecutive_failures=0, consecutive_successes=0,
+        )
+
     def is_available(self, node_id: str) -> bool:
         record = self.registry.health_record(node_id)
         if record is None or record.state in {HealthState.DEAD, HealthState.QUARANTINE}:

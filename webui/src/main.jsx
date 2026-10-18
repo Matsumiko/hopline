@@ -57,6 +57,23 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState("");
+  const [actionResults, setActionResults] = useState({});
+
+  async function nodeAction(nodeId, action) {
+    setActionResults((prev) => ({ ...prev, [nodeId]: { ...prev[nodeId], [action]: "pending" } }));
+    try {
+      const response = await fetch(`/nodes/${nodeId}/${action}`, { method: "POST", headers: { Accept: "application/json" } });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      setActionResults((prev) => ({ ...prev, [nodeId]: { ...prev[nodeId], [action]: `ok: ${payload.state}` } }));
+      refresh();
+    } catch (cause) {
+      setActionResults((prev) => ({ ...prev, [nodeId]: { ...prev[nodeId], [action]: cause.message || "failed" } }));
+    }
+  }
   async function refresh() {
     controllerRef.current?.abort();
     const controller = new AbortController();
@@ -145,7 +162,7 @@ function App() {
 
         <section className="nodes-panel panel"><div className="section-heading"><div><p className="eyebrow">Inventory</p><h2>Nodes</h2></div><span className="muted">Showing {formatCount(filteredNodes.length)} of {formatCount(nodes.length)}</span></div>
           <div className="filters"><label className="search-field"><span>Search</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ID, server, country" /></label><label><span>Protocol</span><select value={protocol} onChange={(event) => setProtocol(event.target.value)}>{protocols.map((item) => <option key={item} value={item}>{item === "all" ? "All protocols" : item.toUpperCase()}</option>)}</select></label><label><span>Health</span><select value={health} onChange={(event) => setHealth(event.target.value)}><option value="all">All states</option>{HEALTH_STATES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></div>
-          {loading && !nodes.length ? <div className="loading-state"><span className="skeleton wide" /><span className="skeleton" /><span className="skeleton" /></div> : filteredNodes.length ? <div className="table-wrap"><table><thead><tr><th>Node</th><th>Protocol</th><th>Health</th><th>Latency</th><th>Exit metadata</th><th>Last probe</th></tr></thead><tbody>{filteredNodes.map((node) => <tr key={node.id}><td><div className="node-cell"><strong>{node.name || node.id}</strong><span>{node.id} · {node.server}:{node.port}</span></div></td><td><span className="protocol-tag">{node.protocol}</span></td><td><span className={`health-tag ${node.health}`}><i />{node.health}</span></td><td className="mono">{formatLatency(node.latency_ms)}</td><td>{node.geolocation ? <div className="geo-cell"><strong>{node.geolocation.country_code}</strong><span>{node.geolocation.ip}</span></div> : <span className="muted">Not available</span>}</td><td className="muted">{formatCheckedAt(node.geolocation?.checked_at)}</td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>No nodes match these filters.</strong><span>Try clearing the search or selecting another health state.</span></div>}
+          {loading && !nodes.length ? <div className="loading-state"><span className="skeleton wide" /><span className="skeleton" /><span className="skeleton" /></div> : filteredNodes.length ? <div className="table-wrap"><table><thead><tr><th>Node</th><th>Protocol</th><th>Health</th><th>Latency</th><th>Exit metadata</th><th>Last probe</th><th>Actions</th></tr></thead><tbody>{filteredNodes.map((node) => <tr key={node.id}><td><div className="node-cell"><strong>{node.name || node.id}</strong><span>{node.id} · {node.server}:{node.port}</span></div></td><td><span className="protocol-tag">{node.protocol}</span></td><td><span className={`health-tag ${node.health}`}><i />{node.health}</span></td><td className="mono">{formatLatency(node.latency_ms)}</td><td>{node.geolocation ? <div className="geo-cell"><strong>{node.geolocation.country_code}</strong><span>{node.geolocation.ip}</span></div> : <span className="muted">Not available</span>}</td><td className="muted">{formatCheckedAt(node.geolocation?.checked_at)}</td><td><div className="row-actions"><button className="action-btn" onClick={() => nodeAction(node.id, "probe")} disabled={actionResults[node.id]?.probe === "pending"}>Probe</button><button className="action-btn" onClick={() => nodeAction(node.id, "enable")} disabled={actionResults[node.id]?.enable === "pending"}>Enable</button><button className="action-btn danger" onClick={() => nodeAction(node.id, "disable")} disabled={actionResults[node.id]?.disable === "pending"}>Disable</button><span className="action-status">{actionResults[node.id]?.probe || actionResults[node.id]?.enable || actionResults[node.id]?.disable || ""}</span></div></td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>No nodes match these filters.</strong><span>Try clearing the search or selecting another health state.</span></div>}
         </section>
       </main>
       <footer><span>Hopline control panel</span><span>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Waiting for control API"}</span></footer>

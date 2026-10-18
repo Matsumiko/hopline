@@ -9,6 +9,8 @@ Format mengikuti prinsip Keep a Changelog. Dokumen ini hanya mencatat perubahan 
 - Menambahkan React control panel read-only di `webui/` dengan overview health, node explorer, filter, loading/empty/error states, dan auto-refresh. Control API dapat menyajikan static build melalui `webui_dir` namun tetap localhost-only; browser tidak menerima credential node atau subscription.
 - Menambahkan `POST /sync` pada control API yang memicu subscription refresh terbatas dari daemon melalui scheduler `sync_now`, serta tombol "Sync now" pada panel React untuk memicunya dari browser.
 - Menambahkan gauge `hopline_protocol_nodes{protocol}` dan menetapkan kepemilikan scrape/retention metrik Prometheus (emit current-state gauge, storage/retention milik scraper eksternal) pada ADR-012.
+- Menambahkan `POST /nodes/{id}/{probe|enable|disable}` pada control API dengan callback daemon; HealthChecker.enable mereset kuarantin ke eligibility baru. Panel kini menampilkan Probe/Enable/Disable per baris node.
+- Gate F1 ditutup formal: seluruh gate criteria terbukti di production PC lokal + 110 regression + acceptance dual-stack.
 - Memperbaiki crash-loop production: fingerprint uTLS provider (`fp=unsafe`) kini dinormalisasi ke set sing-box (unsupported dihilangkan pada node non-Reality, dipetakan ke `chrome` pada Reality), sehingga satu flag provider tidak lagi menolak seluruh config.
 - Menambahkan isolasi node tidak kompatibel di engine: `apply_nodes` menyaring node yang ditolak sing-box melalui bisection dan tidak menerbitkan credential-nya ke gateway, sehingga satu node invalid tidak menumbangkan semua koneksi. Dicatat sebagai ADR-011.
 - Menambahkan static serving dengan SPA fallback dan path traversal protection pada ControlServer, serta regression coverage.

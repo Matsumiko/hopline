@@ -19,6 +19,7 @@ class ControlServer:
         port: int = 18772,
         static_dir: str | Path | None = None,
         sync_callback: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None,
+        node_action_callback: Callable[[str, str], Awaitable[dict[str, Any]]] | None = None,
     ) -> None:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("control API must bind to localhost")
@@ -27,6 +28,7 @@ class ControlServer:
         self.requested_port = port
         self.static_dir = Path(static_dir).resolve() if static_dir else None
         self._sync_callback = sync_callback
+        self._node_action_callback = node_action_callback
         self.server: asyncio.AbstractServer | None = None
 
     @property
@@ -134,6 +136,9 @@ class ControlServer:
             path = urlsplit(raw_path).path
             if method == "POST" and path == "/sync":
                 await self._handle_sync(writer)
+            elif self._match_node_action(method, path) is not None:
+                node_id, action = self._match_node_action(method, path)
+                await self._handle_node_action(writer, node_id, action)
             elif method != "GET":
                 await self._respond(writer, 405, {"error": "method_not_allowed"})
             elif path == "/status":
@@ -157,6 +162,29 @@ class ControlServer:
         try:
             results = await self._sync_callback()
             await self._respond(writer, 200, {"synced": len(results)})
+        except Exception as exc:
+            await self._respond(writer, 502, {"error": type(exc).__name__})
+
+    _NODE_ACTIONS = frozenset({"enable", "disable", "probe"})
+
+    @classmethod
+    def _match_node_action(cls, method: str, path: str) -> tuple[str, str] | None:
+        if method != "POST":
+            return None
+        parts = path.split("/")
+        if len(parts) == 4 and parts[1] == "nodes" and parts[2] and parts[3] in cls._NODE_ACTIONS:
+            return parts[2], parts[3]
+        return None
+
+    async def _handle_node_action(self, writer: asyncio.StreamWriter, node_id: str, action: str) -> None:
+        if self._node_action_callback is None:
+            await self._respond(writer, 501, {"error": "not_implemented"})
+            return
+        try:
+            result = await self._node_action_callback(node_id, action)
+            await self._respond(writer, 200, result)
+        except ValueError as exc:
+            await self._respond(writer, 404, {"error": str(exc)})
         except Exception as exc:
             await self._respond(writer, 502, {"error": type(exc).__name__})
 
