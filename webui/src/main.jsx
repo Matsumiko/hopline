@@ -4,6 +4,62 @@ import "./styles.css";
 
 const HEALTH_STATES = ["healthy", "degraded", "dead", "quarantine", "unknown"];
 
+function DocsContent() {
+  return (
+    <div className="docs-content">
+      <section className="docs-section">
+        <p className="kicker">Guide</p>
+        <h2>Quick start</h2>
+        <p>Set the proxy environment variable and use any HTTP client.</p>
+        <pre className="code-block">{'export HTTPS_PROXY=http://hopline:your-password@127.0.0.1:18770\ncurl https://api.ipify.org'}</pre>
+        <p>The gateway selects a healthy node per connection. Use <code>rotate</code> by default; see routing below for explicit selection.</p>
+      </section>
+
+      <section className="docs-section">
+        <p className="kicker">Subscriptions</p>
+        <h2>Managing sources</h2>
+        <p>Add subscription URLs in the <strong>Sources</strong> panel above. The daemon fetches them on schedule or when you click <strong>Sync now</strong>. Subscriptions are stored in the database; the TOML config file seeds them once on startup.</p>
+        <p>To <strong>delete</strong> a source, use the red Delete button on its row. The daemon retires the orphan nodes in a background sync.</p>
+        <p>Large subscriptions (&gt; 2 000 entries) are clipped to <code>max_nodes</code>. The body must stay under <code>max_body_bytes</code> (10 MiB default).</p>
+      </section>
+
+      <section className="docs-section">
+        <p className="kicker">Routing</p>
+        <h2>Proxy username grammar</h2>
+        <p>The username you send in <code>Proxy-Authorization</code> controls how the gateway picks a node.</p>
+        <div className="table-wrap"><table><thead><tr><th>Username</th><th>Behaviour</th></tr></thead><tbody>
+          <tr><td className="mono">hopline (default)</td><td>rotate — round-robin across healthy nodes.</td></tr>
+          <tr><td className="mono">node-&lt;id&gt;</td><td>Force a specific node. No fallback.</td></tr>
+          <tr><td className="mono">sticky-&lt;sess&gt;</td><td>Bind session to one node (TTL 10 min). Rebinds if dead.</td></tr>
+          <tr><td className="mono">country-&lt;cc&gt;</td><td>Pick a node whose exit geolocation matches the country code.</td></tr>
+          <tr><td className="mono">ipv4 / ipv6</td><td>Pick a node proven to egress via that address family.</td></tr>
+          <tr><td className="mono">*-sticky-&lt;sess&gt;</td><td>Combine sticky with a country or family route.</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section className="docs-section">
+        <p className="kicker">Health</p>
+        <h2>Node states</h2>
+        <div className="table-wrap"><table><thead><tr><th>State</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><span className="health-tag healthy"><i />healthy</span></td><td>Actively probed and responding.</td></tr>
+          <tr><td><span className="health-tag degraded"><i />degraded</span></td><td>One or two recent failures; still eligible, but in cooldown.</td></tr>
+          <tr><td><span className="health-tag dead"><i />dead</span></td><td>Three consecutive failures; excluded until probed again.</td></tr>
+          <tr><td><span className="health-tag quarantine"><i />quarantine</span></td><td>Manually disabled via the panel. Click <strong>Enable</strong> to return.</td></tr>
+          <tr><td><span className="health-tag unknown"><i />unknown</span></td><td>Not yet probed. Eligible but unrated.</td></tr>
+        </tbody></table></div>
+        <p className="muted" style={{marginTop: 16}}>Cooldown: 30 s after a failure. Backoff: 60 s → 120 s → 5 min → 15 min → 1 h. Recovery: three consecutive probe successes.</p>
+      </section>
+
+      <section className="docs-section">
+        <p className="kicker">CLI</p>
+        <h2>Commands</h2>
+        <pre className="code-block">{'python3 -m hopline doctor --json          # check prerequisites\npython3 -m hopline status --json           # live pool summary\npython3 -m hopline nodes --json            # full node list\npython3 -m hopline geo --all --limit 10    # refresh country metadata\npython3 -m hopline run --config hopline.toml'}</pre>
+        <p>Use <code>--once</code> for a single sync cycle. The <code>test</code> command fetches and parses a subscription without running sing-box.</p>
+      </section>
+    </div>
+  );
+}
+
 function formatCount(value) {
   return new Intl.NumberFormat("en-US").format(value ?? 0);
 }
@@ -72,6 +128,7 @@ function App() {
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [subscriptions, setSubscriptions] = useState(null);
   const [service, setService] = useState(null);
+  const [showDocs, setShowDocs] = useState(false);
   const [addUrl, setAddUrl] = useState("");
   const [addingSub, setAddingSub] = useState(false);
   const [addError, setAddError] = useState("");
@@ -213,10 +270,11 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-lockup"><span className="brand-mark">H</span><div><strong>hopline</strong><span>local egress control</span></div></div>
-        <div className="topbar-meta"><span className="live-dot" /> <span>localhost only</span><button className="refresh-button" onClick={syncNow} disabled={syncing}>{syncing ? "Syncing" : "Sync now"}</button><button className="refresh-button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh data"}</button></div>
+        <div className="topbar-meta"><span className="live-dot" /> <span>localhost only</span><button className="refresh-button" onClick={() => setShowDocs((value) => !value)}>{showDocs ? "Close docs" : "Docs"}</button><button className="refresh-button" onClick={syncNow} disabled={syncing}>{syncing ? "Syncing" : "Sync now"}</button><button className="refresh-button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh data"}</button></div>
       </header>
 
       <main className="content">
+        {showDocs ? <DocsContent /> : <>
         <section className="intro-row">
           <div><p className="kicker">Operations / runtime view</p><h1>Node control, without the noise.</h1><p className="lede">A compact view of the active egress pool, health signals, and routing inventory.</p></div>
           <div className="runtime-note"><span className="status-dot" /> <div><strong>Control API</strong><span>{error ? "Connection unavailable" : `:${service?.generation_port ?? "18772"} · ${service?.started_at ? formatUptime(service.started_at) : "running"}`}</span></div></div>
@@ -262,6 +320,7 @@ function App() {
               </>;
             })}</tbody></table></div> : <div className="empty-state"><strong>No nodes match these filters.</strong><span>Try clearing the search or selecting another health state.</span></div>}
         </section>
+      </>}
       </main>
       <footer><span>Hopline control panel</span><span>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Waiting for control API"}</span></footer>
     </div>

@@ -102,6 +102,16 @@ h1 { max-width: 660px; margin-bottom: 14px; font-size: clamp(34px, 5vw, 64px); l
 .node-detail-block span { font-size: 13px; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; }
 .node-detail-block .cap-list { display: flex; flex-wrap: wrap; gap: 5px; }
 .cap-tag { color: var(--blue); border: 1px solid rgb(120 169 196 / .35); padding: 3px 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
+.code-block { margin: 14px 0; padding: 14px 16px; background: var(--surface-raised); border: 1px solid var(--border); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.7; color: var(--text); white-space: pre; overflow-x: auto; }
+.docs-content { max-width: 860px; }
+.docs-section { padding: 0 0 30px; border-bottom: 1px solid var(--border); margin-bottom: 30px; }
+.docs-section:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+.docs-section h2 { font-size: 24px; margin-bottom: 14px; }
+.docs-section p { color: var(--muted); font-size: 14px; line-height: 1.75; margin-bottom: 12px; }
+.docs-section p strong { color: var(--text); }
+.docs-section code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--surface-raised); padding: 1px 5px; border: 1px solid var(--border); }
+.docs-section .table-wrap table { min-width: 0; }
+.docs-section .table-wrap td { white-space: normal; line-height: 1.5; }
 footer { width: min(1400px, 90vw); margin: 0 auto; padding: 22px 0 30px; display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; border-top: 1px solid var(--border); }
 @media (max-width: 760px) { .topbar { padding: 0 5vw; }.topbar-meta > span:not(.live-dot) { display: none; }.content { padding-top: 48px; }.intro-row { align-items: flex-start; flex-direction: column; margin-bottom: 36px; }.runtime-note { width: 100%; }.stats-grid { grid-template-columns: repeat(2, 1fr); }.stat-card:nth-child(2) { border-right: 0; }.stat-card:nth-child(3), .stat-card:nth-child(4) { border-top: 1px solid var(--border); }.health-panel { padding: 20px; }.filters { align-items: stretch; flex-direction: column; }.filters select { width: 100%; }.nodes-panel .section-heading { align-items: flex-start; flex-direction: column; gap: 6px; }.error-banner { align-items: flex-start; flex-wrap: wrap; }.error-banner span { flex-basis: 100%; order: 3; } footer { flex-direction: column; gap: 8px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
