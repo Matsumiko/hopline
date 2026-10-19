@@ -15,6 +15,7 @@ Hopline ditujukan untuk developer atau tim kecil yang menjalankan script/bot di 
 - [Changelog](CHANGELOG.md) — perubahan yang sudah terjadi.
 - [Contributing](CONTRIBUTING.md) — aturan kontribusi dan verifikasi.
 - [Security](SECURITY.md) — aturan secret, privasi, dan pelaporan masalah.
+- [Documentation index](docs/README.md) — reference guides for configuration, control API, web panel, subscriptions, and routing.
 - [ADR index](docs/adr/README.md) — keputusan arsitektur yang memiliki konsekuensi jangka panjang.
 
 ## Interface Target
