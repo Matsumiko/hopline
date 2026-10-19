@@ -22,7 +22,7 @@ class SubscriptionFetcher:
         self,
         *,
         timeout: float = 20.0,
-        max_body_bytes: int = 2 * 1024 * 1024,
+        max_body_bytes: int = 10 * 1024 * 1024,
         user_agent: str = "hopline/0.1",
     ) -> None:
         if timeout <= 0 or max_body_bytes < 1 or not user_agent:

@@ -334,12 +334,17 @@ class SQLiteRegistry:
     def add_managed_subscription(self, url: str) -> None:
         with self.connection:
             self.connection.execute("INSERT OR IGNORE INTO managed_subscriptions(url) VALUES (?)", (url,))
-            self.connection.execute("DELETE FROM removed_subscriptions WHERE url = ?", (url,))
+
+    def seed_managed_subscriptions(self, urls: Iterable[str]) -> None:
+        with self.connection:
+            self.connection.executemany(
+                "INSERT OR IGNORE INTO managed_subscriptions(url) VALUES (?)",
+                ((url,) for url in urls),
+            )
 
     def remove_subscription(self, url: str) -> None:
         with self.connection:
             self.connection.execute("DELETE FROM managed_subscriptions WHERE url = ?", (url,))
-            self.connection.execute("INSERT OR IGNORE INTO removed_subscriptions(url) VALUES (?)", (url,))
 
     def replace_subscription(
         self,

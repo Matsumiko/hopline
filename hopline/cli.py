@@ -283,6 +283,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
 
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
+    registry.seed_managed_subscriptions(config.subscriptions)
     health = HealthChecker(registry)
     engine = SingBoxEngine(
         binary=config.sing_box_binary,
@@ -382,7 +383,14 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             if parsed.username or parsed.password:
                 raise ValueError("subscription_url_must_not_contain_credentials")
             registry.add_managed_subscription(url)
-            asyncio.create_task(scheduler.sync_now())
+
+            async def _bg_sync():
+                try:
+                    await scheduler.sync_now()
+                except (OSError, ValueError, RuntimeError):
+                    pass
+
+            asyncio.create_task(_bg_sync())
             return {"action": "add", "digest": hashlib.sha256(url.encode()).hexdigest()[:10]}
         if action == "delete":
             digest = str(payload.get("digest", "")).strip()

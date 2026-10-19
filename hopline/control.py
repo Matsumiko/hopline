@@ -136,7 +136,6 @@ class ControlServer:
     def subscriptions(self) -> list[dict[str, Any]]:
         counts = self.registry.list_source_counts()
         managed = set(self.registry.list_managed_subscriptions())
-        removed = set(self.registry.list_removed_subscriptions())
         seen: set[str] = set()
         result = []
 
@@ -147,8 +146,6 @@ class ControlServer:
 
         for row in self.registry.list_subscriptions():
             source = row["source"]
-            if source in removed:
-                continue
             seen.add(source)
             parsed = urlsplit(source)
             digest = hashlib.sha256(source.encode()).hexdigest()[:10]
@@ -156,14 +153,13 @@ class ControlServer:
                 "digest": digest,
                 "source": redacted(source),
                 "scheme": parsed.scheme or "static",
-                "managed": source in managed,
                 "valid": bool(row["valid"]),
                 "snapshot_hash": row["snapshot_hash"],
                 "updated_at": row["updated_at"],
                 "nodes": counts.get(source, 0),
             })
         for url in self.registry.list_managed_subscriptions():
-            if url in seen or url in removed:
+            if url in seen:
                 continue
             parsed = urlsplit(url)
             digest = hashlib.sha256(url.encode()).hexdigest()[:10]
@@ -171,7 +167,6 @@ class ControlServer:
                 "digest": digest,
                 "source": redacted(url),
                 "scheme": parsed.scheme or "static",
-                "managed": True,
                 "valid": False,
                 "snapshot_hash": None,
                 "updated_at": None,

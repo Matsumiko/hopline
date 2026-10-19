@@ -276,9 +276,8 @@ class HealthControlTests(unittest.TestCase):
             await server.start()
             try:
                 listing = server.subscriptions()
-                managed_sources = [item for item in listing if item["managed"]]
-                self.assertEqual(len(managed_sources), 1)
-                self.assertTrue(managed_sources[0]["source"].startswith("managed.test#"))
+                self.assertEqual(len(listing), 2)
+                self.assertTrue(any(item["source"].startswith("managed.test#") for item in listing))
 
                 for action, payload in (("add", b'{"url":"https://new.test/sub"}'), ("delete", b'{"digest":"aaaaaaaaaa"}')):
                     length = len(payload)

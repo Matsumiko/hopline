@@ -29,7 +29,7 @@ class Syncer:
         self,
         registry: SQLiteRegistry,
         *,
-        max_body_bytes: int = 2 * 1024 * 1024,
+        max_body_bytes: int = 10 * 1024 * 1024,
         max_nodes: int = 2000,
         fetcher: SubscriptionFetcher | None = None,
     ) -> None:
