@@ -4,11 +4,13 @@ Hopline includes a React control panel in `webui/`. It runs fully client-side an
 
 ## Access
 
-Production: set `webui_dir` in the config and open `http://127.0.0.1:18772`. Remote access requires an SSH tunnel:
+Production: set `webui_dir` in the config and open `http://127.0.0.1:18772`. The panel is protected by a login screen when `[hopline].panel_auth` is enabled (default). Log in with the same username/password as `[auth]`. Remote access requires an SSH tunnel:
 
 ```bash
 ssh -L 18772:127.0.0.1:18772 user@vps
 ```
+
+Sessions use an HttpOnly, SameSite=Strict cookie valid for 12 hours. Use the **Logout** button in the top bar to end the session. Disable the login gate with `panel_auth = false` in `[hopline]` (not recommended).
 
 Dev: `cd webui && npm ci && npm run dev -- --host 127.0.0.1`. Vite proxies `/status`, `/nodes`, `/sync`, `/subscriptions`, and `/service` to the control API.
 

@@ -40,6 +40,7 @@ class HoplineConfig:
     metrics_host: str = "127.0.0.1"
     metrics_port: int = 18773
     webui_dir: str = ""
+    panel_auth: bool = True
     proxy_username: str = field(default="hopline", repr=False)
     proxy_password: str = field(default="", repr=False)
 
@@ -68,6 +69,7 @@ class HoplineConfig:
         sing_box_binary = str(section.get("sing_box_binary", "sing-box"))
         engine_workdir = str(section.get("engine_workdir", ""))
         webui_dir = str(section.get("webui_dir", ""))
+        panel_auth = bool(section.get("panel_auth", True))
         max_active_connections = int(section.get("max_active_connections", 64))
         subscriptions = document.get("subscriptions", [])
         if not isinstance(subscriptions, list):
@@ -181,7 +183,6 @@ class HoplineConfig:
             capability_ipv4_url=capability_ipv4_url,
             capability_ipv6_url=capability_ipv6_url,
             sing_box_binary=sing_box_binary,
-            webui_dir=webui_dir,
             probe_targets=tuple(targets),
             probe_interval=probe_interval,
             probe_timeout=probe_timeout,
@@ -192,6 +193,8 @@ class HoplineConfig:
             metrics_enabled=metrics_enabled,
             metrics_host=metrics_host,
             metrics_port=metrics_port,
+            webui_dir=webui_dir,
+            panel_auth=panel_auth,
             proxy_username=proxy_username,
             proxy_password=proxy_password,
         )

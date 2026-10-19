@@ -340,5 +340,61 @@ class HealthControlTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_panel_login_flow_requires_session(self) -> None:
+        async def scenario() -> None:
+            from pathlib import Path
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "dist"
+                root.mkdir()
+                (root / "index.html").write_text("<html>panel-app</html>", encoding="utf-8")
+                registry = SQLiteRegistry(":memory:")
+                registry.set_setting("auth_username", "hopline")
+                registry.set_setting("auth_password", "secret-pw")
+                registry.set_setting("panel_auth", "true")
+                server = ControlServer(registry, port=0, static_dir=root)
+                await server.start()
+
+                async def raw_request(method: str, path: str, body: bytes = b"", *, cookie: str | None = None) -> tuple[bytes, str]:
+                    reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                    headers = f"{method} {path} HTTP/1.1\r\nHost: localhost\r\n"
+                    if cookie:
+                        headers += f"Cookie: {cookie}\r\n"
+                    if body:
+                        headers += f"Content-Length: {len(body)}\r\nContent-Type: application/x-www-form-urlencoded\r\n"
+                    writer.write(headers.encode() + b"\r\n" + body)
+                    await writer.drain()
+                    response = await reader.read()
+                    writer.close()
+                    await writer.wait_closed()
+                    raw_head = response.split(b"\r\n\r\n", 1)[0]
+                    return raw_head, response.decode("latin-1")
+
+                try:
+                    # No session → login page
+                    head, body = await raw_request("GET", "/")
+                    self.assertIn(b"HTTP/1.1 200 OK", head)
+                    self.assertIn("<title>Hopline Login</title>", body)
+
+                    # Wrong password → 401
+                    head, _ = await raw_request("POST", "/panel/login", b"username=hopline&password=wrong")
+                    self.assertIn(b"HTTP/1.1 401", head)
+
+                    # Correct password → 302 + Set-Cookie
+                    head, _ = await raw_request("POST", "/panel/login", b"username=hopline&password=secret-pw")
+                    self.assertIn(b"HTTP/1.1 302", head)
+                    self.assertIn(b"Set-Cookie: hopline_session=", head)
+                    token = head.split(b"hopline_session=", 1)[1].split(b";", 1)[0].decode()
+
+                    # With cookie → static panel
+                    head, body = await raw_request("GET", "/", cookie=f"hopline_session={token}")
+                    self.assertIn("panel-app", body)
+                finally:
+                    await server.stop()
+                    registry.close()
+
+        asyncio.run(scenario())
+
 if __name__ == "__main__":
     unittest.main()

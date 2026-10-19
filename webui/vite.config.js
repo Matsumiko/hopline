@@ -10,6 +10,8 @@ export default defineConfig({
       "/subscriptions": "http://127.0.0.1:18772",
       "/service": "http://127.0.0.1:18772",
       "/auth": "http://127.0.0.1:18772",
+      "/panel": "http://127.0.0.1:18772",
+      "/login": "http://127.0.0.1:18772",
     },
   },
   build: {

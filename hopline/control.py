@@ -4,9 +4,11 @@ import asyncio
 import hashlib
 import json
 import mimetypes
+import secrets
+import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from .health import HealthState
 
@@ -37,6 +39,107 @@ class ControlServer:
         self._subscription_callback = subscription_callback
         self._auth_callback = auth_callback
         self.server: asyncio.AbstractServer | None = None
+        self._sessions: dict[str, float] = {}
+        self.panel_auth = self.registry.get_setting("panel_auth") == "true"
+
+    # -- panel session auth --
+
+    def _parse_header_value(self, request: bytes, name: str) -> str | None:
+        for line in request.split(b"\r\n")[1:]:
+            if b":" in line:
+                key, value = line.split(b":", 1)
+                if key.strip().lower() == name.encode().lower():
+                    return value.strip().decode("latin-1")
+        return None
+
+    def _session_from_cookie(self, request: bytes) -> str | None:
+        cookie = self._parse_header_value(request, "cookie")
+        if not cookie:
+            return None
+        for part in cookie.split(";"):
+            segment = part.strip()
+            if segment.startswith("hopline_session="):
+                return segment.split("=", 1)[1]
+        return None
+
+    def _valid_session(self, request: bytes) -> bool:
+        token = self._session_from_cookie(request)
+        if token is None:
+            return False
+        expiry = self._sessions.get(token, 0)
+        if expiry < time.time():
+            self._sessions.pop(token, None)
+            return False
+        return True
+
+    def _new_session(self) -> str:
+        token = secrets.token_hex(24)
+        self._sessions[token] = time.time() + 12 * 60 * 60
+        return token
+
+    def _panel_credentials(self) -> tuple[str, str]:
+        username = self.registry.get_setting("auth_username") or ""
+        password = self.registry.get_setting("auth_password") or ""
+        return username, password
+
+    async def _handle_panel_login(self, writer: asyncio.StreamWriter, reader: asyncio.StreamReader, request: bytes) -> None:
+        if not self.panel_auth:
+            await self._respond(writer, 200, {"ok": True})
+            return
+        length = self._content_length(request)
+        body = await asyncio.wait_for(reader.readexactly(length), 2) if length else b""
+        fields = parse_qs(body.decode("utf-8", "replace"))
+        username = (fields.get("username") or [""])[0].strip()
+        password = (fields.get("password") or [""])[0]
+        stored_user, stored_pass = self._panel_credentials()
+        import hmac
+        if username == stored_user and password and hmac.compare_digest(password, stored_pass):
+            token = self._new_session()
+            writer.write(
+                f"HTTP/1.1 302 Found\r\nSet-Cookie: hopline_session={token}; HttpOnly; SameSite=Strict; Path=/\r\n"
+                f"Location: /\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".encode()
+            )
+            await writer.drain()
+            return
+        await self._respond_html(writer, 401, "login", "Invalid username or password")
+
+    async def _handle_panel_logout(self, writer: asyncio.StreamWriter, request: bytes) -> None:
+        token = self._session_from_cookie(request)
+        if token:
+            self._sessions.pop(token, None)
+        writer.write(
+            b"HTTP/1.1 302 Found\r\nSet-Cookie: hopline_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict\r\n"
+            b"Location: /login\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        await writer.drain()
+
+    async def _serve_login_page(self, writer: asyncio.StreamWriter) -> None:
+        html = (
+            "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>Hopline Login</title><style>"
+            "body{background:#101314;color:#e8ece8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;display:flex;align-items:center;justify-content:center;min-height:100dvh;margin:0}"
+            ".card{border:1px solid #2c3433;padding:32px;width:min(360px,88vw);background:#171b1c}"
+            "h1{font-size:18px;margin:0 0 4px}.sub{color:#8e9a95;font-size:12px;margin:0 0 20px}"
+            "label{display:block;color:#8e9a95;font-size:10px;text-transform:uppercase;letter-spacing:.1em;margin:12px 0 4px}"
+            "input{width:100%;box-sizing:border-box;background:#1d2324;border:1px solid #2c3433;color:#e8ece8;padding:10px 12px;font:inherit}"
+            "button{width:100%;margin-top:20px;background:transparent;border:1px solid #d6a85c;color:#d6a85c;padding:10px;font:inherit;cursor:pointer}"
+            ".err{color:#db7c71;font-size:12px;height:14px;margin-top:10px}</style></head><body>"
+            "<form class='card' method='post' action='/panel/login'><h1>Hopline</h1><p class='sub'>Local egress control</p>"
+            "<label for='u'>Username</label><input id='u' name='username' autocomplete='username' required>"
+            "<label for='p'>Password</label><input id='p' name='password' type='password' autocomplete='current-password' required>"
+            "<button type='submit'>Log in</button><div class='err'></div></form></body></html>"
+        )
+        await self._respond_html(writer, 200, "html", html)
+
+    async def _respond_html(self, writer: asyncio.StreamWriter, status: int, content_type: str, body: str) -> None:
+        payload = body.encode("utf-8") if status == 200 else body.encode("utf-8")
+        reason = {200: "OK", 302: "Found", 401: "Unauthorized", 403: "Forbidden"}.get(status, "OK")
+        ctype = "text/html; charset=utf-8" if content_type == "html" else content_type
+        writer.write(
+            f"HTTP/1.1 {status} {reason}\r\nContent-Type: {ctype}\r\n"
+            f"Content-Length: {len(payload)}\r\nConnection: close\r\n\r\n".encode() + payload
+        )
+        await writer.drain()
 
     @property
     def port(self) -> int | None:
@@ -222,7 +325,13 @@ class ControlServer:
             line = request.split(b"\r\n", 1)[0].decode("ascii", "replace")
             method, raw_path, _version = line.split(" ", 2)
             path = urlsplit(raw_path).path
-            if method == "POST" and path == "/sync":
+            if method == "POST" and path == "/panel/login":
+                await self._handle_panel_login(writer, reader, request)
+            elif method == "POST" and path == "/panel/logout":
+                await self._handle_panel_logout(writer, request)
+            elif method == "GET" and path == "/login":
+                await self._serve_login_page(writer)
+            elif method == "POST" and path == "/sync":
                 await self._handle_sync(writer)
             elif method == "POST" and path in {"/subscriptions/add", "/subscriptions/delete"}:
                 await self._handle_subscription(writer, reader, request, path)
@@ -244,7 +353,10 @@ class ControlServer:
             elif path == "/service":
                 await self._handle_runtime(writer)
             elif self.static_dir is not None:
-                await self._respond_static(writer, path)
+                if self.panel_auth and not self._valid_session(request):
+                    await self._serve_login_page(writer)
+                else:
+                    await self._respond_static(writer, path)
             else:
                 await self._respond(writer, 404, {"error": "not_found"})
         except (asyncio.TimeoutError, asyncio.IncompleteReadError, ValueError):

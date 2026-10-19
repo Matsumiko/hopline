@@ -287,6 +287,8 @@ async def _run_daemon(config_path: str, once: bool) -> int:
     if registry.get_setting("auth_username") is None:
         registry.set_setting("auth_username", config.proxy_username)
         registry.set_setting("auth_password", config.proxy_password)
+    if registry.get_setting("panel_auth") is None:
+        registry.set_setting("panel_auth", "true" if config.panel_auth else "false")
     health = HealthChecker(registry)
     engine = SingBoxEngine(
         binary=config.sing_box_binary,

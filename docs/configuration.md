@@ -19,6 +19,7 @@ The Hopline daemon reads a single TOML file (default `hopline.toml`). The file m
 | `sing_box_binary` | string | `"sing-box"` | Path or command name for the sing-box binary. |
 | `engine_workdir` | string | `""` | If set, sing-box working directories are created under this path instead of a tempdir. Use for production (`/var/lib/hopline/engine`). |
 | `webui_dir` | string | `""` | Path to a built React panel (`webui/dist`). When set, the control API serves the static files at `/`. Leave empty to disable. |
+| `panel_auth` | bool | `true` | Require login to open the panel. Credentials reuse `[auth]`. Sessions last 12 h via HttpOnly cookie. |
 | `max_active_connections` | int | `64` | Per-node max concurrent active CONNECT relays. Above this, `503` is returned before tunnel allocation. |
 
 ### `[auth]`

@@ -233,6 +233,13 @@ function App() {
     }
   }
 
+  async function logout() {
+    try {
+      await fetch("/panel/logout", { method: "POST" });
+    } catch {}
+    window.location.href = "/login";
+  }
+
   async function saveAuth() {
     setAuthMsg("");
     try {
@@ -297,7 +304,7 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-lockup"><span className="brand-mark">H</span><div><strong>hopline</strong><span>local egress control</span></div></div>
-        <div className="topbar-meta"><span className="live-dot" /> <span>localhost only</span><button className="refresh-button" onClick={() => setShowDocs((value) => !value)}>{showDocs ? "Close docs" : "Docs"}</button><button className="refresh-button" onClick={syncNow} disabled={syncing}>{syncing ? "Syncing" : "Sync now"}</button><button className="refresh-button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh data"}</button></div>
+        <div className="topbar-meta"><span className="live-dot" /> <span>localhost only</span><button className="refresh-button" onClick={() => setShowDocs((value) => !value)}>{showDocs ? "Close docs" : "Docs"}</button><button className="refresh-button" onClick={syncNow} disabled={syncing}>{syncing ? "Syncing" : "Sync now"}</button><button className="refresh-button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh data"}</button><button className="refresh-button" onClick={logout}>Logout</button></div>
       </header>
 
       <main className="content">
