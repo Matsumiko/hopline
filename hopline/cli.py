@@ -284,6 +284,9 @@ async def _run_daemon(config_path: str, once: bool) -> int:
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
     registry.seed_managed_subscriptions(config.subscriptions)
+    if registry.get_setting("auth_username") is None:
+        registry.set_setting("auth_username", config.proxy_username)
+        registry.set_setting("auth_password", config.proxy_password)
     health = HealthChecker(registry)
     engine = SingBoxEngine(
         binary=config.sing_box_binary,
@@ -407,6 +410,15 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             return {"action": "delete", "digest": digest}
         raise ValueError("unknown_action")
 
+    async def handle_auth(username: str, password: str) -> dict[str, object]:
+        if not username or not password:
+            raise ValueError("username_and_password_required")
+        registry.set_setting("auth_username", username)
+        registry.set_setting("auth_password", password)
+        if gateway is not None:
+            gateway.set_auth(username, password)
+        return {"username": username, "password_set": True}
+
     control = ControlServer(
         registry,
         port=config.control_port,
@@ -415,6 +427,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
         node_action_callback=handle_node_action,
         runtime_callback=runtime_info,
         subscription_callback=handle_subscription,
+        auth_callback=handle_auth,
     )
     probe_scheduler = None
     probe_task = None
@@ -456,8 +469,8 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             record_success=lambda node_id: health.record_success(node_id),
             record_failure=lambda node_id, error: health.record_failure(node_id, error),
             max_active_connections=config.max_active_connections,
-            proxy_username=config.proxy_username,
-            proxy_password=config.proxy_password,
+            proxy_username=registry.get_setting("auth_username") or config.proxy_username,
+            proxy_password=registry.get_setting("auth_password") or config.proxy_password,
         )
         await gateway.start()
         if config.probe_targets:

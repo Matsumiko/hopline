@@ -118,6 +118,10 @@ class SQLiteRegistry:
                 url TEXT PRIMARY KEY,
                 removed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
         self._ensure_columns()
@@ -345,6 +349,18 @@ class SQLiteRegistry:
     def remove_subscription(self, url: str) -> None:
         with self.connection:
             self.connection.execute("DELETE FROM managed_subscriptions WHERE url = ?", (url,))
+
+    def get_setting(self, key: str) -> str | None:
+        row = self.connection.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO settings(key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
 
     def replace_subscription(
         self,

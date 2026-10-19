@@ -300,5 +300,45 @@ class HealthControlTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_control_api_auth_get_and_update(self) -> None:
+        async def scenario() -> None:
+            registry = SQLiteRegistry(":memory:")
+            registry.set_setting("auth_username", "hopline")
+            registry.set_setting("auth_password", "secret-pw")
+            seen = []
+
+            async def auth_callback(username, password):
+                seen.append((username, password))
+                return {"username": username, "password_set": True}
+
+            server = ControlServer(registry, port=0, auth_callback=auth_callback)
+            await server.start()
+            try:
+                # GET /auth returns username + password_set, never the password
+                reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                writer.write(b"GET /auth HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                await writer.drain()
+                response = await reader.read()
+                self.assertIn(b'"username":"hopline"', response)
+                self.assertIn(b'"password_set":true', response)
+                self.assertNotIn(b"secret-pw", response)
+                writer.close(); await writer.wait_closed()
+
+                # POST /auth dispatches and does not echo the password
+                payload = b'{"username":"newuser","password":"newpass"}'
+                reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                writer.write(b"POST /auth HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: " + str(len(payload)).encode() + b"\r\n\r\n" + payload)
+                await writer.drain()
+                response = await reader.read()
+                self.assertIn(b"200 OK", response)
+                self.assertNotIn(b"newpass", response)
+                writer.close(); await writer.wait_closed()
+                self.assertEqual(seen, [("newuser", "newpass")])
+            finally:
+                await server.stop()
+                registry.close()
+
+        asyncio.run(scenario())
+
 if __name__ == "__main__":
     unittest.main()

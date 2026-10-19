@@ -89,6 +89,13 @@ class Gateway:
             for node_id in generation_credentials
         }
 
+    def set_auth(self, username: str, password: str) -> None:
+        """Update local proxy credentials; applies to new connections only."""
+        if not username or not password:
+            raise ValueError("proxy authentication credentials must be non-empty")
+        self._proxy_username = username
+        self._proxy_password = password
+
     async def stop(self) -> None:
         """Stop accepting new clients; preserve existing relay streams."""
         self._accepting = False

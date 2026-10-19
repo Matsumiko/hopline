@@ -132,6 +132,10 @@ function App() {
   const [addUrl, setAddUrl] = useState("");
   const [addingSub, setAddingSub] = useState(false);
   const [addError, setAddError] = useState("");
+  const [auth, setAuth] = useState(null);
+  const [authUser, setAuthUser] = useState("");
+  const [authPass, setAuthPass] = useState("");
+  const [authMsg, setAuthMsg] = useState("");
 
   async function nodeAction(nodeId, action) {
     setActionResults((prev) => ({ ...prev, [nodeId]: { ...prev[nodeId], [action]: "pending" } }));
@@ -155,17 +159,19 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const [nextStatus, nextNodes, nextSubscriptions, nextService] = await Promise.all([
+      const [nextStatus, nextNodes, nextSubscriptions, nextService, nextAuth] = await Promise.all([
         getJson("/status", controller.signal),
         getJson("/nodes", controller.signal),
         getJson("/subscriptions", controller.signal).catch(() => null),
         getJson("/service", controller.signal).catch(() => null),
+        getJson("/auth", controller.signal).catch(() => null),
       ]);
       if (controller.signal.aborted) return;
       setStatus(nextStatus);
       setNodes(nextNodes.nodes ?? []);
       if (nextSubscriptions) setSubscriptions(nextSubscriptions);
       if (nextService) setService(nextService);
+      if (nextAuth) { setAuth(nextAuth); setAuthUser(nextAuth.username || ""); }
       setLastUpdated(new Date());
     } catch (cause) {
       if (cause.name !== "AbortError" && !controller.signal.aborted) setError(cause.message || "Unable to reach the control API.");
@@ -224,6 +230,27 @@ function App() {
       setAddError(cause.message || "Failed to add subscription");
     } finally {
       setAddingSub(false);
+    }
+  }
+
+  async function saveAuth() {
+    setAuthMsg("");
+    try {
+      const response = await fetch("/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ username: authUser, password: authPass }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      setAuth(payload);
+      setAuthPass("");
+      setAuthMsg("Saved");
+    } catch (cause) {
+      setAuthMsg(cause.message || "Save failed");
     }
   }
 
@@ -291,6 +318,8 @@ function App() {
         </section>
 
         <section className="health-panel panel"><div className="section-heading"><div><p className="eyebrow">Pool health</p><h2>Current distribution</h2></div><span className="muted">{formatCount(healthTotal)} registered nodes</span></div><HealthBar health={status?.health} total={healthTotal} /><div className="legend">{HEALTH_STATES.map((state) => <span key={state}><i className={`legend-dot ${state}`} />{state}<b>{formatCount(status?.health?.[state])}</b></span>)}</div></section>
+
+        <section className="auth-panel panel"><div className="section-heading"><div><p className="eyebrow">Access</p><h2>Proxy credentials</h2></div><span className="muted">{auth?.password_set ? "Set" : "Not set"}</span></div><div className="sub-add-row"><input className="sub-add-input" type="text" value={authUser} onChange={(event) => setAuthUser(event.target.value)} placeholder="username" /><input className="sub-add-input" type="password" value={authPass} onChange={(event) => setAuthPass(event.target.value)} placeholder="new password" /><button className="action-btn" onClick={saveAuth} disabled={!authUser.trim() || !authPass}>Save</button></div>{authMsg && <div className={`${authMsg === "Saved" ? "sync-result" : "sub-add-error"}`}>{authMsg}</div>}</section>
 
         <section className="subscriptions-panel panel"><div className="section-heading"><div><p className="eyebrow">Sources</p><h2>Subscriptions</h2></div><span className="muted">{formatCount(subscriptions?.subscriptions?.length ?? 0)} source(s)</span></div><div className="sub-add-row"><input className="sub-add-input" type="text" value={addUrl} onChange={(event) => setAddUrl(event.target.value)} placeholder="https://example.com/rules.json" disabled={addingSub} /><button className="action-btn" onClick={addSubscription} disabled={addingSub || !addUrl.trim()}>{addingSub ? "Adding…" : "Add subscription"}</button></div>{addError && <div className="sub-add-error" role="alert">{addError}</div>}{subscriptions?.subscriptions?.length > 0 && <div className="table-wrap"><table className="sub-table"><thead><tr><th>Source</th><th>Scheme</th><th>Status</th><th>Nodes</th><th>Snapshot</th><th>Updated</th><th></th></tr></thead><tbody>{subscriptions.subscriptions.map((sub) => <tr key={sub.source}><td><span className="sub-source">{sub.source}</span></td><td><span className="protocol-tag">{sub.scheme}</span></td><td><span className={`health-tag ${sub.valid ? "healthy" : "dead"}`}><i />{sub.valid ? "valid" : "invalid"}</span></td><td><span className="source-count">{formatCount(sub.nodes)}</span></td><td className="mono">{sub.snapshot_hash ? sub.snapshot_hash.slice(0, 12) : ""}</td><td className="muted">{sub.updated_at ? new Date(sub.updated_at + "Z").toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : ""}</td><td>{<button className="action-btn danger" onClick={() => deleteSubscription(sub.digest)}>Delete</button>}</td></tr>)}</tbody></table></div>}</section>
 

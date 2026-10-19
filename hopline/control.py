@@ -23,6 +23,7 @@ class ControlServer:
         node_action_callback: Callable[[str, str], Awaitable[dict[str, Any]]] | None = None,
         runtime_callback: Callable[[], Awaitable[dict[str, Any]]] | None = None,
         subscription_callback: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]] | None = None,
+        auth_callback: Callable[[str, str], Awaitable[dict[str, Any]]] | None = None,
     ) -> None:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("control API must bind to localhost")
@@ -34,6 +35,7 @@ class ControlServer:
         self._node_action_callback = node_action_callback
         self._runtime_callback = runtime_callback
         self._subscription_callback = subscription_callback
+        self._auth_callback = auth_callback
         self.server: asyncio.AbstractServer | None = None
 
     @property
@@ -174,6 +176,36 @@ class ControlServer:
             })
         return result
 
+    def auth(self) -> dict[str, Any]:
+        username = self.registry.get_setting("auth_username")
+        password = self.registry.get_setting("auth_password")
+        return {
+            "username": username or "",
+            "password_set": bool(password),
+        }
+
+    async def _handle_auth(self, writer: asyncio.StreamWriter, reader: asyncio.StreamReader, request: bytes) -> None:
+        if self._auth_callback is None:
+            await self._respond(writer, 501, {"error": "not_implemented"})
+            return
+        length = self._content_length(request)
+        body = await asyncio.wait_for(reader.readexactly(length), 2) if length else b""
+        try:
+            payload = json.loads(body.decode("utf-8")) if body else {}
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            await self._respond(writer, 400, {"error": "bad_request"})
+            return
+        username = str(payload.get("username", "")).strip()
+        password = str(payload.get("password", ""))
+        if not username or not password:
+            await self._respond(writer, 400, {"error": "username_and_password_required"})
+            return
+        try:
+            result = await self._auth_callback(username, password)
+            await self._respond(writer, 200, result)
+        except Exception as exc:
+            await self._respond(writer, 502, {"error": type(exc).__name__})
+
     async def _handle_runtime(self, writer: asyncio.StreamWriter) -> None:
         if self._runtime_callback is None:
             await self._respond(writer, 501, {"error": "not_implemented"})
@@ -194,6 +226,8 @@ class ControlServer:
                 await self._handle_sync(writer)
             elif method == "POST" and path in {"/subscriptions/add", "/subscriptions/delete"}:
                 await self._handle_subscription(writer, reader, request, path)
+            elif method == "POST" and path == "/auth":
+                await self._handle_auth(writer, reader, request)
             elif self._match_node_action(method, path) is not None:
                 node_id, action = self._match_node_action(method, path)
                 await self._handle_node_action(writer, node_id, action)
@@ -205,6 +239,8 @@ class ControlServer:
                 await self._respond(writer, 200, {"nodes": self.nodes()})
             elif path == "/subscriptions":
                 await self._respond(writer, 200, {"subscriptions": self.subscriptions()})
+            elif path == "/auth":
+                await self._respond(writer, 200, self.auth())
             elif path == "/service":
                 await self._handle_runtime(writer)
             elif self.static_dir is not None:
