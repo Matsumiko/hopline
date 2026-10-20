@@ -396,5 +396,42 @@ class HealthControlTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_api_requires_auth_when_panel_auth_enabled(self) -> None:
+        async def scenario() -> None:
+            registry = SQLiteRegistry(":memory:")
+            registry.set_setting("auth_username", "hopline")
+            registry.set_setting("auth_password", "secret-pw")
+            registry.set_setting("panel_auth", "true")
+            server = ControlServer(registry, port=0)
+            await server.start()
+            try:
+                async def get(path: str, extra: str = "") -> bytes:
+                    reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+                    writer.write(f"GET {path} HTTP/1.1\r\nHost: localhost\r\n{extra}\r\n\r\n".encode())
+                    await writer.drain()
+                    response = await reader.read()
+                    writer.close()
+                    await writer.wait_closed()
+                    return response
+
+                # No auth → 401
+                response = await get("/nodes")
+                self.assertIn(b"HTTP/1.1 401", response)
+
+                # Basic auth → 200
+                import base64
+                token = base64.b64encode(b"hopline:secret-pw").decode()
+                response = await get("/nodes", f"Authorization: Basic {token}")
+                self.assertIn(b"HTTP/1.1 200", response)
+
+                # Unknown static path (no static_dir) → 404, not 401
+                response = await get("/status")
+                self.assertIn(b"HTTP/1.1 401", response)
+            finally:
+                await server.stop()
+                registry.close()
+
+        asyncio.run(scenario())
+
 if __name__ == "__main__":
     unittest.main()

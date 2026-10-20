@@ -49,6 +49,7 @@ def _parser() -> argparse.ArgumentParser:
         sub = subparsers.add_parser(name, help=f"Read control API {name}")
         sub.add_argument("--host", default="127.0.0.1")
         sub.add_argument("--port", type=int, default=18772)
+        sub.add_argument("--config", default=os.environ.get("HOPLINE_CONFIG", "hopline.toml"), help="TOML config path for auth")
         sub.add_argument("--json", action="store_true", dest="as_json")
     run = subparsers.add_parser("run", help="Run the subscription scheduler")
     run.add_argument("--config", default=os.environ.get("HOPLINE_CONFIG", "hopline.toml"), help="TOML config path")
@@ -260,10 +261,20 @@ def _doctor(database: str) -> dict[str, object]:
     return {"database": str(db_path), "database_exists": db_path.exists(), "nodes": nodes, "schema_version": schema, "sing_box": binary is not None, "sing_box_path": binary or ""}
 
 
-async def _control_request(host: str, port: int, path: str) -> dict[str, object]:
+async def _control_request(host: str, port: int, path: str, config_path: str | None = None) -> dict[str, object]:
+    import base64 as _base64
+
+    headers = ""
+    if config_path:
+        try:
+            config = HoplineConfig.from_file(config_path)
+            token = _base64.b64encode(f"{config.proxy_username}:{config.proxy_password}".encode()).decode("ascii")
+            headers = f"Authorization: Basic {token}\r\n"
+        except (OSError, ValueError):
+            pass
     reader, writer = await asyncio.open_connection(host, port)
     try:
-        writer.write(f"GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".encode())
+        writer.write(f"GET {path} HTTP/1.1\r\nHost: localhost\r\n{headers}Connection: close\r\n\r\n".encode())
         await writer.drain()
         response = await reader.read()
         header, body = response.split(b"\r\n\r\n", 1)
@@ -561,7 +572,7 @@ def main(argv: list[str] | None = None) -> int:
             _emit(payload, args.as_json)
             return 0 if payload["sing_box"] else 2
         if args.command in {"status", "nodes"}:
-            _emit(asyncio.run(_control_request(args.host, args.port, "/" + args.command)), args.as_json)
+            _emit(asyncio.run(_control_request(args.host, args.port, "/" + args.command, args.config)), args.as_json)
             return 0
         if args.command == "run":
             return asyncio.run(_run_daemon(args.config, args.once))

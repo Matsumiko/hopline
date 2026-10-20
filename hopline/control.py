@@ -72,6 +72,32 @@ class ControlServer:
             return False
         return True
 
+    def _is_api_path(self, method: str, path: str) -> bool:
+        if path in {"/status", "/nodes", "/subscriptions", "/auth", "/service"}:
+            return True
+        if path.startswith("/sync") or path.startswith("/subscriptions/"):
+            return True
+        if path == "/nodes" or (path.startswith("/nodes/") and self._match_node_action(method, path) is not None):
+            return True
+        return False
+
+    def _api_allowed(self, request: bytes) -> bool:
+        if not self.panel_auth:
+            return True
+        if self._valid_session(request):
+            return True
+        auth = self._parse_header_value(request, "authorization")
+        if not auth or not auth.lower().startswith("basic "):
+            return False
+        import base64, binascii, hmac
+        try:
+            decoded = base64.b64decode(auth[6:], validate=True).decode("utf-8")
+        except (binascii.Error, UnicodeDecodeError):
+            return False
+        username, _, password = decoded.partition(":")
+        stored_user, stored_pass = self._panel_credentials()
+        return bool(username) and bool(password) and hmac.compare_digest(username, stored_user) and hmac.compare_digest(password, stored_pass)
+
     def _new_session(self) -> str:
         token = secrets.token_hex(24)
         self._sessions[token] = time.time() + 12 * 60 * 60
@@ -331,6 +357,8 @@ class ControlServer:
                 await self._handle_panel_logout(writer, request)
             elif method == "GET" and path == "/login":
                 await self._serve_login_page(writer)
+            elif self._is_api_path(method, path) and not self._api_allowed(request):
+                await self._respond(writer, 401, {"error": "unauthorized"})
             elif method == "POST" and path == "/sync":
                 await self._handle_sync(writer)
             elif method == "POST" and path in {"/subscriptions/add", "/subscriptions/delete"}:
@@ -457,7 +485,7 @@ class ControlServer:
     @staticmethod
     async def _respond(writer: asyncio.StreamWriter, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-        reason = {200: "OK", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 501: "Not Implemented", 502: "Bad Gateway"}[status]
+        reason = {200: "OK", 400: "Bad Request", 401: "Unauthorized", 404: "Not Found", 405: "Method Not Allowed", 501: "Not Implemented", 502: "Bad Gateway"}[status]
         writer.write(
             f"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode() + body
         )
