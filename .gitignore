@@ -1,0 +1,19 @@
+# Secrets and local runtime state — never commit
+.env
+*.db
+*.db-wal
+*.db-shm
+*-node.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Frontend
+webui/node_modules/
+webui/dist/
+
+# Local scratch
+*.log
