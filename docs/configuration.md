@@ -90,3 +90,8 @@ static_nodes = [
 |---|---|
 | `HOPLINE_CONFIG` | Override the config file path (default `hopline.toml`). |
 | `HOPLINE_SUBSCRIPTION_URL` | Fallback subscription URL for `hopline sync --url` (CLI only). |
+## Health vs performance
+
+Probe results (`successes`, `failures`, `latency_ms`) determine node liveness only. Relay outcomes are stored separately in `performance` (`conn_successes`, `conn_failures`, `latency_ewma_ms`) and never change the health state, so a node that relays slowly is not marked dead and a node that passes probes is not hidden by relay errors.
+
+Failures are recorded as stable categories (`connect_timeout`, `connect_refused`, `connect_reset`, `tls_error`, `handshake_timeout`, `auth_rejected`, `upstream_rejected`, `probe_timeout`, `probe_failed`, `node_mismatch`, `io_error`, `unknown`) with any credential material redacted.

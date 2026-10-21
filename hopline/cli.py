@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .config import HoplineConfig
+from .failures import parse_legacy
 from .engine import SingBoxEngine
 from .geolocation import DEFAULT_EXIT_IP_URL, GeolocationResolver, fetch_exit_ip, is_fresh
 from .gateway import Gateway
@@ -479,8 +480,8 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             ),
             country_max_age=config.country_max_age,
             capability_max_age=config.capability_max_age,
-            record_success=lambda node_id: health.record_success(node_id),
-            record_failure=lambda node_id, error: health.record_failure(node_id, error),
+            record_success=lambda node_id: health.record_connection(node_id, ok=True),
+            record_failure=lambda node_id, error: health.record_connection(node_id, ok=False, reason=parse_legacy(error)),
             max_active_connections=config.max_active_connections,
             proxy_username=registry.get_setting("auth_username") or config.proxy_username,
             proxy_password=registry.get_setting("auth_password") or config.proxy_password,

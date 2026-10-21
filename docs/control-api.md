@@ -33,8 +33,11 @@ Pool-level aggregates.
 | `port` | int | Node port. |
 | `name` | string \| null | Share-link fragment name. |
 | `health` | string | `healthy`, `degraded`, `dead`, `quarantine`, or `unknown`. |
-| `successes` / `failures` | int | Health counters. |
-| `latency_ms` | float \| null | Last observed latency. |
+| `successes` / `failures` | int | **Probe** health counters (liveness). |
+| `latency_ms` | float \| null | Last probe latency. |
+| `performance` | object | Relay performance, independent of probe health: `conn_successes`, `conn_failures`, `latency_ewma_ms`, `success_rate`. |
+| `failure` | object \| null | Structured last failure: `{category, code}`. |
+| `failure_category` | string \| null | Stable category of the most recent failure. |
 | `capabilities` | object | `ipv4` and `ipv6`, each `{capable, ip, checked_at, last_error}` or `null`. |
 | `geolocation` | object \| null | `{ip, country_code, country, asn, organization, provider, checked_at}`. |
 

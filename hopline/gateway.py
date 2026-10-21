@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from .failures import NODE_MISMATCH, UPSTREAM_REJECTED, FailureReason, classify_exception
 from .generation import Generation, GenerationLease, GenerationManager
 from .health import HealthState
 from .picker import NodePicker
@@ -191,7 +192,7 @@ class Gateway:
                     except RuntimeError as error:
                         # The picker may still hold a node from a newer generation than the
                         # one we leased; treat it as a failed candidate and try the next.
-                        self._report_failure(node_id, type(error).__name__)
+                        self._report_failure(node_id, classify_exception(error))
                         continue
                     upstream_reader, upstream = await asyncio.wait_for(
                         asyncio.open_connection("127.0.0.1", generation_port), 3
@@ -212,9 +213,9 @@ class Gateway:
                         await self._relay(reader, client, upstream_reader, upstream)
                         return
                     last_response = response
-                    self._report_failure(node_id, "upstream_rejected")
+                    self._report_failure(node_id, FailureReason(UPSTREAM_REJECTED))
                 except (asyncio.TimeoutError, asyncio.IncompleteReadError, ConnectionError, OSError) as error:
-                    self._report_failure(node_id, type(error).__name__)
+                    self._report_failure(node_id, classify_exception(error))
                 finally:
                     self._release(node_id)
                     if lease is not None:
@@ -268,7 +269,7 @@ class Gateway:
             if credential is not None:
                 return lease, lease.generation.port, credential
             lease.generation.release()
-        raise RuntimeError(f"node {node_id} is not part of the active generation")
+        raise RuntimeError(FailureReason(NODE_MISMATCH).code)
 
     async def _release_generation(self, lease: GenerationLease) -> None:
         manager = self._generation_manager
@@ -289,9 +290,9 @@ class Gateway:
             raise RuntimeError(f"active connection underflow for {node_id}")
         self._active_connections[node_id] = active - 1
 
-    def _report_failure(self, node_id: str, error: str) -> None:
+    def _report_failure(self, node_id: str, reason: FailureReason) -> None:
         if self._record_failure is not None:
-            self._record_failure(node_id, error)
+            self._record_failure(node_id, reason.code)
 
     async def _relay(
         self,

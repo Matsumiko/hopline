@@ -138,6 +138,13 @@ class SQLiteRegistry:
             ("probe_after", "REAL NOT NULL DEFAULT 0"),
             ("consecutive_failures", "INTEGER NOT NULL DEFAULT 0"),
             ("consecutive_successes", "INTEGER NOT NULL DEFAULT 0"),
+            # Probe health (liveness) is stored in `successes`/`failures`. Connection
+            # performance is tracked separately so probe failures cannot mask relay
+            # failures and vice versa.
+            ("conn_successes", "INTEGER NOT NULL DEFAULT 0"),
+            ("conn_failures", "INTEGER NOT NULL DEFAULT 0"),
+            ("latency_ewma_ms", "REAL"),
+            ("failure_category", "TEXT"),
         )
         for name, definition in health_columns:
             if name not in tables["health"]:
@@ -252,7 +259,8 @@ class SQLiteRegistry:
 
         row = self.connection.execute(
             "SELECT node_id, state, successes, failures, latency_ms, last_error, updated_at, "
-            "cooldown_until, probe_after, consecutive_failures, consecutive_successes "
+            "cooldown_until, probe_after, consecutive_failures, consecutive_successes, "
+            "conn_successes, conn_failures, latency_ewma_ms, failure_category "
             "FROM health WHERE node_id = ?",
             (node_id,),
         ).fetchone()
@@ -263,6 +271,8 @@ class SQLiteRegistry:
             row["failures"], row["latency_ms"], row["last_error"], row["updated_at"],
             row["cooldown_until"], row["probe_after"],
             row["consecutive_failures"], row["consecutive_successes"],
+            row["conn_successes"], row["conn_failures"],
+            row["latency_ewma_ms"], row["failure_category"],
         )
 
     def save_health(
@@ -270,6 +280,8 @@ class SQLiteRegistry:
         latency_ms: float | None, last_error: str | None, *,
         cooldown_until: float = 0.0, probe_after: float = 0.0,
         consecutive_failures: int = 0, consecutive_successes: int = 0,
+        conn_successes: int = 0, conn_failures: int = 0,
+        latency_ewma_ms: float | None = None, failure_category: str | None = None,
     ):
         import time
 
@@ -280,16 +292,20 @@ class SQLiteRegistry:
             self.connection.execute(
                 """INSERT INTO health(
                     node_id, state, successes, failures, latency_ms, last_error, updated_at,
-                    cooldown_until, probe_after, consecutive_failures, consecutive_successes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    cooldown_until, probe_after, consecutive_failures, consecutive_successes,
+                    conn_successes, conn_failures, latency_ewma_ms, failure_category
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(node_id) DO UPDATE SET state=excluded.state, successes=excluded.successes,
                 failures=excluded.failures, latency_ms=excluded.latency_ms, last_error=excluded.last_error,
                 updated_at=excluded.updated_at, cooldown_until=excluded.cooldown_until,
                 probe_after=excluded.probe_after, consecutive_failures=excluded.consecutive_failures,
-                consecutive_successes=excluded.consecutive_successes""",
+                consecutive_successes=excluded.consecutive_successes, conn_successes=excluded.conn_successes,
+                conn_failures=excluded.conn_failures, latency_ewma_ms=excluded.latency_ewma_ms,
+                failure_category=excluded.failure_category""",
                 (
                     node_id, str(state), successes, failures, latency_ms, last_error, updated_at,
                     cooldown_until, probe_after, consecutive_failures, consecutive_successes,
+                    conn_successes, conn_failures, latency_ewma_ms, failure_category,
                 ),
             )
         return self.health_record(node_id)

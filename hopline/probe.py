@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+from .failures import PROBE_FAILED, PROBE_TIMEOUT, FailureReason, classify_exception
 from .health import HealthChecker, HealthRecord
 from .models import Node
 
@@ -121,9 +122,9 @@ class ActiveProbeScheduler:
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            return self.checker.record_failure(node.id, type(error).__name__)
+            return self.checker.record_failure(node.id, classify_exception(error))
         latency_ms = (time.monotonic() - started) * 1000
-        return self.checker.record_success(node.id, latency_ms) if ok else self.checker.record_failure(node.id, "probe returned false")
+        return self.checker.record_success(node.id, latency_ms) if ok else self.checker.record_failure(node.id, FailureReason(PROBE_FAILED))
 
     async def probe_once(self) -> list[HealthRecord]:
         nodes = tuple(self.nodes())

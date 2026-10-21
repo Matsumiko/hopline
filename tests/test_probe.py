@@ -69,7 +69,7 @@ class ProbeTests(unittest.TestCase):
             )
             record = (await scheduler.probe_once())[0]
             self.assertEqual(record.state, HealthState.DEGRADED)
-            self.assertEqual(record.last_error, "TimeoutError")
+            self.assertEqual(record.failure_category, "connect_timeout")
             registry.close()
 
         asyncio.run(scenario())

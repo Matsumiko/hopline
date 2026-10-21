@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from .failures import parse_legacy
 from .health import HealthState
 
 
@@ -237,6 +238,22 @@ class ControlServer:
                     "successes": record.successes if record else 0,
                     "failures": record.failures if record else 0,
                     "latency_ms": record.latency_ms if record else None,
+                    "performance": {
+                        "conn_successes": record.conn_successes if record else 0,
+                        "conn_failures": record.conn_failures if record else 0,
+                        "latency_ewma_ms": record.latency_ewma_ms if record else None,
+                        "success_rate": (
+                            round(record.conn_successes / (record.conn_successes + record.conn_failures), 4)
+                            if record and (record.conn_successes + record.conn_failures) else None
+                        ),
+                    },
+                    "failure": (
+                        {
+                            "category": parse_legacy(record.failure_category).category,
+                            "code": record.failure_category,
+                        }
+                        if record and record.failure_category else None
+                    ),
                     "capabilities": {
                         family: {
                             "capable": record.ip is not None,
