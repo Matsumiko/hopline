@@ -15,6 +15,7 @@ Hopline documentation is structured by topic. Each page is self-contained and re
 | [Routing limits](routing-limits.md) | Explicit limits of failover, rotation, routing, and lifecycle |
 | [Generation recovery](generation-recovery.md) | What to do when a generation fails to start or drains slowly |
 | [Benchmark](benchmark.md) | Reproducible in-process benchmarks and how to read them |
+| [Deployment](deployment.md) | systemd installer, container image, upgrade, and post-deploy checks |
 
 ## Architecture Decisions
 

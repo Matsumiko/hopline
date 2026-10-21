@@ -100,7 +100,7 @@ class SyncerRegistryTests(unittest.TestCase):
     def test_schema_is_created_on_connection(self) -> None:
         connection = sqlite3.connect(":memory:")
         registry = SQLiteRegistry(connection)
-        self.assertEqual(registry.schema_version(), 2)
+        self.assertEqual(registry.schema_version(), SQLiteRegistry.SCHEMA_VERSION)
 
 
 if __name__ == "__main__":

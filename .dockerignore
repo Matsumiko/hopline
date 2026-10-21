@@ -1,0 +1,17 @@
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm
+*-node.txt
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+webui/node_modules/
+webui/dist/
+experiments/**/__pycache__/
+tools/__pycache__/
+tests/__pycache__/
+.git/
+*.log

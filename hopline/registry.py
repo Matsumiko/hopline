@@ -27,7 +27,7 @@ class SQLiteRegistry:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
-            INSERT OR IGNORE INTO metadata(key, value) VALUES ('schema_version', '2');
+            INSERT OR IGNORE INTO metadata(key, value) VALUES ('schema_version', '1');
             CREATE TABLE IF NOT EXISTS nodes (
                 id TEXT PRIMARY KEY,
                 protocol TEXT NOT NULL,
@@ -124,48 +124,83 @@ class SQLiteRegistry:
             );
             """
         )
-        self._ensure_columns()
+        self._migrate()
         self.connection.commit()
 
-    def _ensure_columns(self) -> None:
-        tables = {
-            "nodes": {row[1] for row in self.connection.execute("PRAGMA table_info(nodes)")},
-            "subscriptions": {row[1] for row in self.connection.execute("PRAGMA table_info(subscriptions)")},
-            "health": {row[1] for row in self.connection.execute("PRAGMA table_info(health)")},
+    SCHEMA_VERSION = 3
+
+    def _columns(self) -> dict[str, set[str]]:
+        return {
+            table: {row[1] for row in self.connection.execute(f"PRAGMA table_info({table})")}
+            for table in ("nodes", "subscriptions", "health")
         }
-        health_columns = (
-            ("cooldown_until", "REAL NOT NULL DEFAULT 0"),
-            ("probe_after", "REAL NOT NULL DEFAULT 0"),
-            ("consecutive_failures", "INTEGER NOT NULL DEFAULT 0"),
-            ("consecutive_successes", "INTEGER NOT NULL DEFAULT 0"),
-            # Probe health (liveness) is stored in `successes`/`failures`. Connection
-            # performance is tracked separately so probe failures cannot mask relay
-            # failures and vice versa.
-            ("conn_successes", "INTEGER NOT NULL DEFAULT 0"),
-            ("conn_failures", "INTEGER NOT NULL DEFAULT 0"),
-            ("latency_ewma_ms", "REAL"),
-            ("failure_category", "TEXT"),
+
+    def _add_columns(self, table: str, columns: tuple[tuple[str, str], ...], existing: set[str]) -> None:
+        for name, definition in columns:
+            if name not in existing:
+                self.connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+                existing.add(name)
+
+    def _migrate(self) -> None:
+        """Apply ordered, idempotent migrations up to SCHEMA_VERSION.
+
+        Each step is additive (CREATE/ALTER only) so an older database can always be
+        upgraded in place. A database newer than this build is refused rather than
+        silently used with missing columns.
+        """
+        version = self.schema_version()
+        if version > self.SCHEMA_VERSION:
+            raise RuntimeError(
+                f"registry schema {version} is newer than supported {self.SCHEMA_VERSION}"
+            )
+        tables = self._columns()
+
+        if version < 2:
+            self._add_columns("health", (
+                ("cooldown_until", "REAL NOT NULL DEFAULT 0"),
+                ("probe_after", "REAL NOT NULL DEFAULT 0"),
+                ("consecutive_failures", "INTEGER NOT NULL DEFAULT 0"),
+                ("consecutive_successes", "INTEGER NOT NULL DEFAULT 0"),
+            ), tables["health"])
+            self._add_columns("nodes", (
+                ("path", "TEXT"), ("host", "TEXT"), ("method", "TEXT"),
+                ("plugin", "TEXT"), ("plugin_opts", "TEXT"), ("security", "TEXT"),
+                ("global_padding", "INTEGER"), ("authenticated_length", "INTEGER"),
+                ("alter_id", "INTEGER"), ("packet_encoding", "TEXT"), ("flow", "TEXT"),
+                ("encryption", "TEXT"), ("reality_pbk", "TEXT"), ("reality_sid", "TEXT"),
+                ("reality_spx", "TEXT"), ("fingerprint", "TEXT"), ("alpn", "TEXT"),
+                ("allow_insecure", "INTEGER"), ("service_name", "TEXT"), ("header_type", "TEXT"),
+            ), tables["nodes"])
+            self._add_columns("subscriptions", (
+                ("body", "BLOB"), ("etag", "TEXT"), ("last_modified", "TEXT"),
+            ), tables["subscriptions"])
+            self._set_schema_version(2)
+            version = 2
+
+        if version < 3:
+            # Probe health (successes/failures/latency_ms) stays authoritative for
+            # liveness. Relay performance lives in its own columns so the two can never
+            # overwrite each other.
+            self._add_columns("health", (
+                ("conn_successes", "INTEGER NOT NULL DEFAULT 0"),
+                ("conn_failures", "INTEGER NOT NULL DEFAULT 0"),
+                ("latency_ewma_ms", "REAL"),
+                ("failure_category", "TEXT"),
+            ), tables["health"])
+            self._set_schema_version(3)
+            version = 3
+
+    def _set_schema_version(self, version: int) -> None:
+        self.connection.execute(
+            "UPDATE metadata SET value = ? WHERE key = 'schema_version'", (str(version),)
         )
-        for name, definition in health_columns:
-            if name not in tables["health"]:
-                self.connection.execute(f"ALTER TABLE health ADD COLUMN {name} {definition}")
-        node_columns = (
-            ("path", "TEXT"), ("host", "TEXT"), ("method", "TEXT"),
-            ("plugin", "TEXT"), ("plugin_opts", "TEXT"), ("security", "TEXT"),
-            ("global_padding", "INTEGER"), ("authenticated_length", "INTEGER"),
-            ("alter_id", "INTEGER"), ("packet_encoding", "TEXT"), ("flow", "TEXT"),
-            ("encryption", "TEXT"), ("reality_pbk", "TEXT"), ("reality_sid", "TEXT"),
-            ("reality_spx", "TEXT"), ("fingerprint", "TEXT"), ("alpn", "TEXT"),
-            ("allow_insecure", "INTEGER"), ("service_name", "TEXT"), ("header_type", "TEXT"),
-        )
-        for name, definition in node_columns:
-            if name not in tables["nodes"]:
-                self.connection.execute(f"ALTER TABLE nodes ADD COLUMN {name} {definition}")
-        for name, definition in (("body", "BLOB"), ("etag", "TEXT"), ("last_modified", "TEXT")):
-            if name not in tables["subscriptions"]:
-                self.connection.execute(f"ALTER TABLE subscriptions ADD COLUMN {name} {definition}")
-        if self.schema_version() < 2:
-            self.connection.execute("UPDATE metadata SET value = '2' WHERE key = 'schema_version'")
+
+    def migrate_to_latest(self) -> int:
+        """Explicitly run migrations and return the resulting version."""
+        self._migrate()
+        self.connection.commit()
+        return self.schema_version()
+
     def geolocation_record(self, node_id: str):
         return self.connection.execute(
             "SELECT node_id, ip, country_code, country, asn, organization, provider, checked_at "

@@ -1,0 +1,52 @@
+# Hopline daemon configuration. Keep this file private: chmod 0600.
+# Copy to /etc/hopline/hopline.toml and fill in real values.
+
+[hopline]
+database = "/var/lib/hopline/hopline.db"
+interval = 2700
+jitter = 30
+gateway_host = "127.0.0.1"
+gateway_port = 18770
+tunnel_port = 18771
+control_port = 18772
+country_max_age = 3600
+sing_box_binary = "/usr/local/bin/sing-box"
+engine_workdir = "/var/lib/hopline/engine"
+max_active_connections = 64
+# Built React panel; leave empty to serve only the control API.
+webui_dir = "/opt/hopline/app/webui/dist"
+# Require login (uses [auth] below) before the panel is served.
+panel_auth = true
+
+[auth]
+username = "hopline"
+password = "change-me-to-a-long-random-value"
+
+# Optional: subscription URLs are seeded into the database on first start.
+# After that, manage sources from the panel.
+# [[subscriptions]]
+# url = "https://example.invalid/subscription"
+
+# Optional: direct share links that are not part of a subscription.
+# static_nodes = [
+#   "vless://00000000-0000-4000-8000-000000000000@host.example:443?security=tls&type=ws&path=%2Fws#label",
+# ]
+
+[health]
+mode = "http"
+targets = ["http://cp.cloudflare.com/"]
+interval = 300
+timeout = 5
+concurrency = 10
+metrics_enabled = true
+metrics_host = "127.0.0.1"
+metrics_port = 18773
+
+[capability]
+enabled = false
+max_age = 3600
+interval = 900
+timeout = 20
+concurrency = 1
+ipv4_url = "https://api4.ipify.org?format=json"
+ipv6_url = "https://api6.ipify.org?format=json"
