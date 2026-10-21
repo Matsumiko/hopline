@@ -4,7 +4,7 @@ Hopline adalah gateway proxy lokal yang memilih node sehat dari subscription VMe
 
 Hopline ditujukan untuk developer atau tim kecil yang menjalankan script/bot di VPS dan membutuhkan satu endpoint proxy lokal tanpa mengubah routing jaringan VPS.
 
-> **Status:** Fase 1 sedang berjalan. Runtime vertical slice, HTTP subscription fetch, dan multi-protocol snapshot Syncer tersedia; scheduler berkala, CLI, health scoring, dan failover belum selesai.
+> **Status:** Fase 1 ditutup (2026-10-18). Vertical slice, scheduler berkala, CLI, health scoring, failover pre-forward (lihat [routing limits](docs/routing-limits.md)), sticky/country/capability routing, control API, web panel, dan metrics Prometheus tersedia. Gate Fase 1 lulus; stabilitas egress per-node tetap dilacak sebagai risiko operasional. Status acceptance terukur ada di [docs/acceptance-status.md](docs/acceptance-status.md). Lihat [PROGRESS.md](PROGRESS.md).
 
 ## Dokumen Utama
 
@@ -15,7 +15,7 @@ Hopline ditujukan untuk developer atau tim kecil yang menjalankan script/bot di 
 - [Changelog](CHANGELOG.md) — perubahan yang sudah terjadi.
 - [Contributing](CONTRIBUTING.md) — aturan kontribusi dan verifikasi.
 - [Security](SECURITY.md) — aturan secret, privasi, dan pelaporan masalah.
-- [Documentation index](docs/README.md) — reference guides for configuration, control API, web panel, subscriptions, and routing.
+- [Documentation index](docs/README.md) — configuration, control API, web panel, subscriptions, routing, acceptance status, limits, recovery, and benchmarks.
 - [ADR index](docs/adr/README.md) — keputusan arsitektur yang memiliki konsekuensi jangka panjang.
 
 ## Interface Target
@@ -39,7 +39,7 @@ Hopline mengelola pemilihan, health, failover sebelum byte client diteruskan, si
 
 ## Status Saat Ini
 
-Package runtime tersedia di `hopline/`. Parser share-link VLESS, Trojan, VMess, dan Shadowsocks, structured parser Clash YAML/sing-box JSON, bounded subscription fetch, SQLite registry dengan removed hysteresis tiga sync, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, sticky routing process-local, node routing, drain, scheduler dasar, dan CLI sudah diuji. Sticky memakai username `sticky-<sessionId>`, TTL idle default 10 menit, dan rebind ke node sehat sebelum CONNECT 200 jika binding lama dead atau tidak eligible. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
+Package runtime tersedia di `hopline/`. Parser share-link VLESS, Trojan, VMess, dan Shadowsocks, structured parser Clash YAML/sing-box JSON, bounded subscription fetch, SQLite registry dengan removed hysteresis tiga sync, conditional validators, last-valid fallback, config generation, generation-aware sing-box engine, HTTP CONNECT gateway, rotate, sticky routing process-local, node routing, drain, scheduler berkala, CLI, control API, web panel, dan metrics sudah diuji. Sticky memakai username `sticky-<sessionId>`, TTL idle default 10 menit, dan rebind ke node sehat sebelum CONNECT 200 jika binding lama dead atau tidak eligible. Lihat [PROGRESS.md](PROGRESS.md) untuk bukti dan pekerjaan berikutnya.
 
 Parser share-link dan generator sing-box mempertahankan transport WebSocket/TLS; Shadowsocks `v2ray-plugin` menyimpan `plugin` dan `plugin_opts`, sedangkan VMess mempertahankan `security`, `global_padding`, dan `authenticated_length`.
 

@@ -11,6 +11,10 @@ Hopline documentation is structured by topic. Each page is self-contained and re
 | [Web Panel](web-panel.md) | The React control panel: overview, node explorer, subscriptions, and actions |
 | [Subscriptions](subscriptions.md) | Subscription lifecycle, DB model, seeding from config, add/delete via panel, and node retirement |
 | [Routing](routing.md) | Proxy CONNECT username grammar: rotate, node, sticky, country, and IP-family routes |
+| [Acceptance status](acceptance-status.md) | Latest measured acceptance per protocol and address family, and what it does not prove |
+| [Routing limits](routing-limits.md) | Explicit limits of failover, rotation, routing, and lifecycle |
+| [Generation recovery](generation-recovery.md) | What to do when a generation fails to start or drains slowly |
+| [Benchmark](benchmark.md) | Reproducible in-process benchmarks and how to read them |
 
 ## Architecture Decisions
 
