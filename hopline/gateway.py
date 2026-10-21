@@ -7,7 +7,9 @@ import hmac
 import re
 import time
 from collections.abc import Callable
+from typing import Any
 
+from .generation import Generation, GenerationLease, GenerationManager
 from .health import HealthState
 from .picker import NodePicker
 from .sticky import StickySessionStore
@@ -64,6 +66,17 @@ class Gateway:
         self._sticky = sticky_store or StickySessionStore(ttl=sticky_ttl)
         self._server: asyncio.AbstractServer | None = None
         self._tasks: set[asyncio.Task[None]] = set()
+        self._generation_manager: GenerationManager | None = None
+
+    def attach_generations(self, manager: GenerationManager) -> None:
+        """Bind the gateway to the engine generation lifecycle.
+
+        New connections acquire a lease on the active generation; the engine only
+        stops a generation once every lease it handed out has been released.
+        """
+        if manager.active is None:
+            raise ValueError("generation manager has no active generation")
+        self._generation_manager = manager
 
     @property
     def port(self) -> int | None:
@@ -84,10 +97,10 @@ class Gateway:
         self._generation_port = generation_port
         self._generation_credentials = dict(generation_credentials)
         self._picker.replace(generation_credentials)
-        self._active_connections = {
-            node_id: self._active_connections.get(node_id, 0)
-            for node_id in generation_credentials
-        }
+        # Never drop counters for nodes that still have live relays: a node removed
+        # from the new generation must keep its counter until its last lease ends.
+        for node_id in generation_credentials:
+            self._active_connections.setdefault(node_id, 0)
 
     def set_auth(self, username: str, password: str) -> None:
         """Update local proxy credentials; applies to new connections only."""
@@ -157,11 +170,18 @@ class Gateway:
                 if not self._reserve(node_id):
                     continue
                 attempted_any = True
+                lease: GenerationLease | None = None
                 try:
+                    try:
+                        lease, generation_port, credential = self._acquire_generation(node_id)
+                    except RuntimeError as error:
+                        # The picker may still hold a node from a newer generation than the
+                        # one we leased; treat it as a failed candidate and try the next.
+                        self._report_failure(node_id, type(error).__name__)
+                        continue
                     upstream_reader, upstream = await asyncio.wait_for(
-                        asyncio.open_connection("127.0.0.1", self._generation_port), 3
+                        asyncio.open_connection("127.0.0.1", generation_port), 3
                     )
-                    credential = self._generation_credentials[node_id]
                     token = base64.b64encode(f"{node_id}:{credential}".encode()).decode()
                     upstream.write(
                         f"CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n".encode()
@@ -183,6 +203,8 @@ class Gateway:
                     self._report_failure(node_id, type(error).__name__)
                 finally:
                     self._release(node_id)
+                    if lease is not None:
+                        await self._release_generation(lease)
                     if upstream is not None and not upstream.is_closing():
                         upstream.close()
                         try:
@@ -214,6 +236,27 @@ class Gateway:
                     await client.wait_closed()
                 except ConnectionError:
                     pass
+
+    def _acquire_generation(self, node_id: str) -> tuple[GenerationLease, int, str]:
+        """Lease the active generation and snapshot its port/credential atomically."""
+        manager = self._generation_manager
+        if manager is None:
+            # No lifecycle manager attached (unit tests / legacy embedding): the gateway
+            # owns the single generation and no drain accounting is required.
+            return GenerationLease(Generation(label="unmanaged", port=self._generation_port)), self._generation_port, self._generation_credentials[node_id]
+        lease = manager.acquire()
+        credential = lease.generation.credentials.get(node_id)
+        if credential is None:
+            # The node was published by a newer generation than the one we leased.
+            lease.generation.release()
+            raise RuntimeError(f"node {node_id} is not part of {lease.generation.label}")
+        return lease, lease.generation.port, credential
+
+    async def _release_generation(self, lease: GenerationLease) -> None:
+        manager = self._generation_manager
+        if manager is None:
+            return
+        await manager.release(lease)
 
     def _reserve(self, node_id: str) -> bool:
         active = self._active_connections.get(node_id, 0)

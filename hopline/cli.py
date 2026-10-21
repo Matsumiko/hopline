@@ -330,7 +330,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             return
         gateway.publish_generation(
             generation.port,
-            accepted_credentials(registry.list_nodes()),
+            generation.credentials or accepted_credentials(registry.list_nodes()),
         )
 
     scheduler = SubscriptionScheduler(
@@ -485,6 +485,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             proxy_username=registry.get_setting("auth_username") or config.proxy_username,
             proxy_password=registry.get_setting("auth_password") or config.proxy_password,
         )
+        gateway.attach_generations(engine.manager)
         await gateway.start()
         if config.probe_targets:
             probe = None

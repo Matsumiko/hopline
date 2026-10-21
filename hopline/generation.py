@@ -11,6 +11,7 @@ class Generation:
     active_connections: int = 0
     accepting: bool = True
     drained: asyncio.Event = field(default_factory=asyncio.Event)
+    credentials: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.drained.set()
@@ -54,10 +55,23 @@ class GenerationManager:
         self.active.acquire()
         return GenerationLease(self.active)
 
+    def promote(self, generation: Generation) -> None:
+        """Start accepting connections on an already-running generation (startup)."""
+        if not generation.accepting:
+            raise ValueError("cannot promote a draining generation")
+        if self.active is not None and self.active is not generation:
+            self.publish(generation)
+            return
+        self.active = generation
+
     async def release(self, lease: GenerationLease) -> None:
-        lease.generation.release()
-        if lease.generation.active_connections == 0 and lease.generation in self._draining:
-            self._draining.remove(lease.generation)
+        generation = lease.generation
+        if generation.active_connections <= 0:
+            # Already fully drained; releasing twice must not underflow.
+            return
+        generation.release()
+        if generation.active_connections == 0 and generation in self._draining:
+            self._draining.remove(generation)
 
     async def wait_drained(self, generation: Generation) -> None:
         await generation.drained.wait()

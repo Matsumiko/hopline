@@ -57,9 +57,9 @@ class SubscriptionScheduler:
             if self.engine is None:
                 results.append(await self.syncer.sync_url(source))
             else:
-                result, generation = await self.syncer.sync_url_and_apply(source, self.engine)
-                if self.on_generation is not None:
-                    self.on_generation(generation)
+                # Fetch/parse only; a single generation is published after every source
+                # has been reconciled so intermediate snapshots never trigger a swap.
+                result = await self.syncer.sync_url(source)
                 results.append(result)
         for link in self.static_nodes:
             if self._stop.is_set():
@@ -68,18 +68,20 @@ class SubscriptionScheduler:
             if self.engine is None:
                 results.append(self.syncer.sync_static(link))
             else:
-                result, generation = await self.syncer.sync_static_and_apply(link, self.engine)
-                if self.on_generation is not None:
-                    self.on_generation(generation)
-                results.append(result)
+                results.append(self.syncer.sync_static(link))
         registry = getattr(self.syncer, "registry", None)
         if completed and registry is not None:
-            before = registry.snapshot_ids() if self.engine is not None else ()
-            registry.reconcile_subscription_sources(sources)
-            if self.engine is not None and before != registry.snapshot_ids():
+            if self.engine is not None:
                 nodes = registry.list_nodes()
                 if nodes:
                     generation = await self.engine.apply_nodes(nodes)
+                    if self.on_generation is not None:
+                        self.on_generation(generation)
+            registry.reconcile_subscription_sources(sources)
+            if self.engine is not None and registry.snapshot_ids() != tuple(node.id for node in nodes):
+                remaining = registry.list_nodes()
+                if remaining:
+                    generation = await self.engine.apply_nodes(remaining)
                     if self.on_generation is not None:
                         self.on_generation(generation)
         return results

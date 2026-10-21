@@ -112,11 +112,22 @@ class SingBoxEngine:
             return self.manager.active
         config = build_config(supported, listen_port=self.base_port)
         previous = self.manager.active
-        generation = await self.start_generation(config)
+        try:
+            generation = await self.start_generation(config)
+        except BaseException:
+            # A failed start must leave the previous generation serving untouched.
+            if previous is not None:
+                self._active_node_signature = self._signature_for(previous)
+            raise
+        generation.credentials = {node.id: node.credential for node in supported}
         self._active_node_signature = signature
         if previous is not None and previous is not generation:
             await self.stop_generation(previous)
         return generation
+
+    def _signature_for(self, generation: Generation) -> tuple[tuple[object, ...], ...] | None:
+        """Keep the previous signature so a failed publish retries on the next sync."""
+        return self._active_node_signature
 
     async def start_generation(self, config: dict[str, Any]) -> Generation:
         if shutil.which(self.binary) is None:
@@ -175,6 +186,9 @@ class SingBoxEngine:
         running = self._running.get(generation.label)
         if running is None:
             return
+        # The gateway releases a lease only after its relay finishes, so this wait is
+        # what guarantees no active stream is cut by a generation swap or shutdown.
+        generation.accepting = False
         await self.manager.wait_drained(generation)
         await self._terminate(running.process)
         self._running.pop(generation.label, None)
