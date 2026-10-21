@@ -77,6 +77,20 @@ class Gateway:
         if manager.active is None:
             raise ValueError("generation manager has no active generation")
         self._generation_manager = manager
+        active = manager.active
+        if active.credentials:
+            # Credentials must describe the leased generation, otherwise the picker can
+            # choose a node that does not exist in the generation being leased.
+            self._generation_port = active.port
+            self._generation_credentials = dict(active.credentials)
+            self._picker.replace(active.credentials)
+            for node_id in active.credentials:
+                self._active_connections.setdefault(node_id, 0)
+
+    def _active_generation(self) -> Generation | None:
+        if self._generation_manager is None:
+            return None
+        return self._generation_manager.active
 
     @property
     def port(self) -> int | None:
@@ -238,19 +252,23 @@ class Gateway:
                     pass
 
     def _acquire_generation(self, node_id: str) -> tuple[GenerationLease, int, str]:
-        """Lease the active generation and snapshot its port/credential atomically."""
+        """Lease a generation that actually contains this node.
+
+        The picker may briefly hold credentials from a generation published after the
+        lease was taken; in that case re-lease against the current active generation.
+        """
         manager = self._generation_manager
         if manager is None:
             # No lifecycle manager attached (unit tests / legacy embedding): the gateway
             # owns the single generation and no drain accounting is required.
             return GenerationLease(Generation(label="unmanaged", port=self._generation_port)), self._generation_port, self._generation_credentials[node_id]
-        lease = manager.acquire()
-        credential = lease.generation.credentials.get(node_id)
-        if credential is None:
-            # The node was published by a newer generation than the one we leased.
+        for _attempt in range(2):
+            lease = manager.acquire()
+            credential = lease.generation.credentials.get(node_id)
+            if credential is not None:
+                return lease, lease.generation.port, credential
             lease.generation.release()
-            raise RuntimeError(f"node {node_id} is not part of {lease.generation.label}")
-        return lease, lease.generation.port, credential
+        raise RuntimeError(f"node {node_id} is not part of the active generation")
 
     async def _release_generation(self, lease: GenerationLease) -> None:
         manager = self._generation_manager

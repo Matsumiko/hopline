@@ -128,7 +128,7 @@ class GenerationLeaseLifecycleTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
-    def test_gateway_skips_node_missing_from_leased_generation(self) -> None:
+    def test_gateway_releases_lease_when_node_missing_from_every_generation(self) -> None:
         async def scenario() -> None:
             manager = GenerationManager()
             generation = Generation(label="gen", port=1, credentials={"node-b": "y"})
@@ -148,6 +148,33 @@ class GenerationLeaseLifecycleTests(unittest.TestCase):
                 0,
                 "a rejected lease must not leave the generation counter incremented",
             )
+
+        asyncio.run(scenario())
+
+    def test_gateway_releases_against_current_generation_after_swap(self) -> None:
+        async def scenario() -> None:
+            manager = GenerationManager()
+            old = Generation(label="old", port=1, credentials={"node-a": "x"})
+            manager.promote(old)
+            gateway = Gateway(
+                host="127.0.0.1",
+                port=0,
+                generation_port=1,
+                generation_credentials={"node-a": "x"},
+                proxy_password="x",
+            )
+            gateway.attach_generations(manager)
+
+            new = Generation(label="new", port=2, credentials={"node-a": "x2"})
+            manager.publish(new)
+            gateway.publish_generation(new.port, new.credentials)
+
+            lease, port, credential = gateway._acquire_generation("node-a")
+            self.assertEqual(port, 2, "lease must follow the active generation")
+            self.assertEqual(credential, "x2")
+            self.assertEqual(new.active_connections, 1)
+            await gateway._release_generation(lease)
+            self.assertEqual(new.active_connections, 0)
 
         asyncio.run(scenario())
 
