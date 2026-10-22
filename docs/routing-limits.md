@@ -38,3 +38,9 @@ Health probe juga destination-specific: lolos `cp.cloudflare.com` bukan berarti 
 - Generation lama dihentikan setelah **semua lease** dilepas.
 - Jika generation baru gagal start, generation lama tetap aktif dan signature tidak diperbarui sehingga sync berikutnya mencoba lagi.
 - Shutdown normal menunggu drain; tidak ada pemutusan paksa stream aktif.
+
+## Public exposure
+
+The gateway may bind a public interface (`gateway_host = "0.0.0.0"`), but control API, metrics, and the sing-box tunnel always stay on `127.0.0.1`. Internal probes and geo/capability collectors dial loopback even when the gateway is public, so they never traverse the public interface.
+
+A VPS behind provider NAT may not be reachable on the public IP at all: only forwarded ports work. In that case use Tailscale (`HTTP(S)_PROXY=http://hopline:<password>@<tailscale-ip>:18770`) instead of opening a port.

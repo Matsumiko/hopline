@@ -89,7 +89,7 @@ async def _resolve_geo_node(
 ) -> dict[str, object]:
     ip = await asyncio.to_thread(
         fetch_exit_ip,
-        proxy_host=config.gateway_host,
+        proxy_host=_loopback(config.gateway_host),
         proxy_port=config.gateway_port,
         proxy_username=f"node-{node_id}",
         proxy_password=config.proxy_password,
@@ -208,7 +208,7 @@ async def _capability_all(config_path: str) -> dict[str, object]:
                 try:
                     ip = await asyncio.to_thread(
                         fetch_exit_ip,
-                        proxy_host=config.gateway_host,
+                        proxy_host=_loopback(config.gateway_host),
                         proxy_port=config.gateway_port,
                         proxy_username=f"node-{node_id}",
                         proxy_password=config.proxy_password,
@@ -249,6 +249,13 @@ async def _geo_refresh_loop(
         except (OSError, ValueError, RuntimeError):
             pass
         await asyncio.sleep(interval)
+
+def _loopback(host: str) -> str:
+    """Internal callers always dial loopback, even when the gateway is public."""
+    if host in {"0.0.0.0", "::", ""}:
+        return "127.0.0.1"
+    return host
+
 
 def _doctor(database: str) -> dict[str, object]:
     binary = shutil.which("sing-box")

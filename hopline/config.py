@@ -150,7 +150,9 @@ class HoplineConfig:
 
         if interval <= 0 or jitter < 0 or jitter >= interval:
             raise ValueError("interval and jitter are invalid")
-        if gateway_host not in {"127.0.0.1", "::1", "localhost"} or not 0 <= gateway_port <= 65535:
+        # The gateway may be exposed publicly by explicit operator choice. Control,
+        # metrics, and the sing-box tunnel stay localhost-only regardless.
+        if not gateway_host or not 0 <= gateway_port <= 65535:
             raise ValueError("gateway endpoint is invalid")
         if not 1 <= tunnel_port <= 65535 or gateway_port == tunnel_port:
             raise ValueError("tunnel endpoint is invalid")

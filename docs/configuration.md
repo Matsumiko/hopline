@@ -11,7 +11,7 @@ The Hopline daemon reads a single TOML file (default `hopline.toml`). The file m
 | `database` | string | `"hopline.db"` | SQLite registry path. Use an absolute path for production (`/var/lib/hopline/hopline.db`). |
 | `interval` | float | `2700` | Seconds between scheduler subscription sync cycles. |
 | `jitter` | float | `0` | Random ± seconds applied to each interval. Must be < `interval`. |
-| `gateway_host` | string | `"127.0.0.1"` | HTTP CONNECT proxy bind address. Must be localhost. |
+| `gateway_host` | string | `"127.0.0.1"` | HTTP CONNECT proxy bind address. Use `0.0.0.0` only to expose the proxy deliberately; control, metrics, and tunnel remain localhost. |
 | `gateway_port` | int | `18770` | Gateway listener port. |
 | `tunnel_port` | int | `18771` | First generation sing-box mixed inbound port. |
 | `control_port` | int | `18772` | Control API listener. Set to `0` for ephemeral (test only). |
