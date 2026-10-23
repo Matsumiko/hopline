@@ -34,7 +34,21 @@ class NodePicker:
             for offset in range(len(self._node_ids))
         ]
         self._next = (self._next + 1) % len(self._node_ids)
-        return [node_id for node_id in ordered if self._eligible(node_id, eligible)]
+        eligible_ids = [node_id for node_id in ordered if self._eligible(node_id, eligible)]
+        if not eligible_ids:
+            return []
+        # Prefer nodes with a successful probe. A degraded node has already failed
+        # recently and is usually unusable; it stays as a fallback so a pool that is
+        # still being probed can serve traffic instead of returning 503.
+        healthy: list[str] = []
+        fallback: list[str] = []
+        for node_id in eligible_ids:
+            state = self._state(node_id)
+            if state in {HealthState.HEALTHY, "healthy"}:
+                healthy.append(node_id)
+            else:
+                fallback.append(node_id)
+        return healthy + fallback
 
     def _eligible(self, node_id: str, eligible: Callable[[str], bool] | None = None) -> bool:
         state = self._state(node_id)

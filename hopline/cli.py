@@ -302,7 +302,7 @@ async def _run_daemon(config_path: str, once: bool) -> int:
 
     config = HoplineConfig.from_file(config_path)
     registry = SQLiteRegistry(config.database)
-    registry.seed_managed_subscriptions(config.subscriptions)
+    registry.seed_managed_subscriptions_once(config.subscriptions)
     if registry.get_setting("auth_username") is None:
         registry.set_setting("auth_username", config.proxy_username)
         registry.set_setting("auth_password", config.proxy_password)
@@ -418,7 +418,8 @@ async def _run_daemon(config_path: str, once: bool) -> int:
             return {"action": "add", "digest": hashlib.sha256(url.encode()).hexdigest()[:10]}
         if action == "delete":
             digest = str(payload.get("digest", "")).strip()
-            candidates = list(config.subscriptions) + list(registry.list_managed_subscriptions())
+            # The database is the only source of truth after the first seed.
+            candidates = list(registry.list_managed_subscriptions())
             target = None
             for candidate in candidates:
                 if hashlib.sha256(candidate.encode()).hexdigest()[:10] == digest:
@@ -467,7 +468,15 @@ async def _run_daemon(config_path: str, once: bool) -> int:
     try:
         results = await scheduler.sync_once()
         nodes = registry.list_nodes()
-        if not results or not nodes or engine.manager.active is None:
+        # A provider outage must not stop an already-working service: fall back to the
+        # last valid snapshot as long as the registry still has nodes.
+        if not nodes or engine.manager.active is None:
+            if results:
+                print(
+                    "hopline: no usable nodes after sync: "
+                    + ", ".join(f"{r.source} status={r.status}" for r in results),
+                    file=sys.stderr,
+                )
             return 2
         gateway = Gateway(
             host=config.gateway_host,

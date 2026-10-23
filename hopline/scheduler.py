@@ -21,7 +21,9 @@ class SubscriptionScheduler:
         interval: float = 45 * 60,
         jitter: float = 0,
     ) -> None:
-        if not sources and not static_nodes:
+        registry = getattr(syncer, "registry", None)
+        has_registry_sources = registry is not None and bool(registry.list_managed_subscriptions())
+        if not sources and not static_nodes and not has_registry_sources:
             raise ValueError("at least one subscription source or static node is required")
         if interval <= 0 or jitter < 0 or jitter >= interval:
             raise ValueError("scheduler interval and jitter are invalid")

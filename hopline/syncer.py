@@ -102,10 +102,14 @@ class Syncer:
                 etag=metadata["etag"] if metadata else None,
                 last_modified=metadata["last_modified"] if metadata else None,
             )
-        except (OSError, urllib.error.URLError, TimeoutError):
+        except (OSError, urllib.error.URLError, TimeoutError, urllib.error.HTTPError) as error:
+            # A provider rate limit or server error must not take the daemon down. Keep
+            # the last valid snapshot; only fail when there is nothing to fall back to.
             if not metadata or metadata["body"] is None:
-                raise
-            return SyncResult(url, False, len(self.registry.list_nodes()), 0, True, status=0)
+                status = getattr(error, "code", 0)
+                return SyncResult(url, False, 0, 0, False, status=status)
+            status = getattr(error, "code", 0)
+            return SyncResult(url, False, len(self.registry.list_nodes()), 0, True, status=status)
         if fetched.not_modified:
             return SyncResult(
                 url, False, len(self.registry.list_nodes()), 0, False,

@@ -390,12 +390,25 @@ class SQLiteRegistry:
         with self.connection:
             self.connection.execute("INSERT OR IGNORE INTO managed_subscriptions(url) VALUES (?)", (url,))
 
-    def seed_managed_subscriptions(self, urls: Iterable[str]) -> None:
+    def seed_managed_subscriptions_once(self, urls: Iterable[str]) -> bool:
+        """Import config URLs exactly once, on a database that has never been seeded.
+
+        After the first run the database is the single source of truth; deleting a
+        source from the panel must not be undone by a later restart. A marker row in
+        `settings` records that seeding already happened.
+        """
+        if self.get_setting("subscriptions_seeded") == "true":
+            return False
         with self.connection:
             self.connection.executemany(
                 "INSERT OR IGNORE INTO managed_subscriptions(url) VALUES (?)",
                 ((url,) for url in urls),
             )
+            self.connection.execute(
+                "INSERT INTO settings(key, value) VALUES ('subscriptions_seeded', 'true') "
+                "ON CONFLICT(key) DO UPDATE SET value = 'true'"
+            )
+        return True
 
     def remove_subscription(self, url: str) -> None:
         with self.connection:
