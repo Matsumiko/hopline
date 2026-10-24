@@ -4,19 +4,19 @@ Subscriptions are the node sources. Hopline parses VMess, VLESS, Trojan, and Sha
 
 ## Single Source of Truth
 
-The SQLite registry is the source of truth for subscriptions. The TOML `[[subscriptions]]` entries are a **bootstrap seed**: on daemon startup, each config URL is inserted into the `managed_subscriptions` table with `INSERT OR IGNORE`. After the first startup, the panel manages subscriptions; config edits only take effect for sources not yet present.
+The SQLite registry is the **only** source of truth for subscriptions. The TOML file carries no subscription list on an established host.
+
+`[[subscriptions]]` exists solely for first-time provisioning: on the very first start it is imported into `managed_subscriptions` and a `subscriptions_seeded` marker is written to `settings`. From then on the import is skipped permanently, so a source deleted in the panel can never be resurrected by a restart or by editing the config.
 
 ```text
-startup:
-  config [[subscriptions]] ──seed──▶ managed_subscriptions (SQLite)
-
-sync cycle:
-  scheduler reads managed_subscriptions ▶ fetch ▶ parse ▶ registry
+first start :  config [[subscriptions]] ──seed──▶ managed_subscriptions
+later starts:  managed_subscriptions (SQLite) ──▶ sync
 ```
+
 
 ## Lifecycle
 
-1. **Seed** — config URLs are inserted into `managed_subscriptions` on startup.
+1. **Seed** — config URLs are imported into `managed_subscriptions` exactly once; the marker makes every later start a no-op.
 2. **Sync** — the scheduler fetches each source on `interval`, honoring ETag and Last-Modified; a `304` is a no-op.
 3. **Parse** — share links are parsed and deduplicated by connection parameters into a stable node ID.
 4. **Validate** — malformed entries are counted as `invalid` but a previous valid snapshot is retained (`used_last_valid`).

@@ -53,7 +53,7 @@ python3 -m hopline sync --url "$HOPLINE_SUBSCRIPTION_URL" --db hopline.db --json
 
 `sync` menyimpan node dan metadata subscription ke SQLite. `test` mengambil dan mem-parse subscription tanpa menjalankan sing-box. `doctor` memeriksa schema registry, jumlah node, dan binary sing-box. Output `--json` hanya berisi metadata; credential node dan isi subscription tidak ditampilkan.
 
-Daemon memakai file TOML private (`0600`). Sumber node dapat berupa subscription HTTP(S) dan/atau `static_nodes` share link langsung. `static_nodes` menjalankan node satuan tanpa mencocokkannya ke subscription:
+Daemon memakai file TOML private (`0600`) untuk `[hopline]`, `[auth]`, dan `[health]`. Sumber subscription disimpan di database dan dikelola dari panel; blok `[[subscriptions]]` hanya dipakai untuk provisioning awal (diimpor sekali, lalu diabaikan). `static_nodes` share link langsung tetap didukung dan menjalankan node satuan tanpa mencocokkannya ke subscription:
 
 ```toml
 static_nodes = [

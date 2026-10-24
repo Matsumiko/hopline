@@ -13,7 +13,7 @@ Tiga jalur pemasangan: installer systemd (disarankan), container, dan manual.
 
 ```bash
 sudo HOPLINE_INSTALL_START=0 bash packaging/install.sh
-sudoedit /etc/hopline/hopline.toml     # isi [auth] dan [[subscriptions]]
+sudoedit /etc/hopline/hopline.toml     # isi [auth]; tambahkan [[subscriptions]] untuk source pertama
 sudo HOPLINE_INSTALL_START=1 bash packaging/install.sh
 ```
 
@@ -76,7 +76,7 @@ Panel: `http://127.0.0.1:18772` (login memakai `[auth]`).
 sudo HOPLINE_INSTALL_START=1 bash packaging/install.sh
 ```
 
-Skema SQLite dimigrasi otomatis saat start. Migrasi bersifat aditif dan idempoten; database dari versi lebih baru ditolak, bukan dipakai dengan kolom yang hilang. Untuk rollback, lihat [generation-recovery.md](generation-recovery.md).
+Source subscription dikelola dari panel setelah start pertama; `[[subscriptions]]` hanya dipakai untuk provisioning awal dan boleh dihapus setelah database terisi. Skema SQLite dimigrasi otomatis saat start. Migrasi bersifat aditif dan idempoten; database dari versi lebih baru ditolak, bukan dipakai dengan kolom yang hilang. Untuk rollback, lihat [generation-recovery.md](generation-recovery.md).
 
 ## Verifikasi pasca-deploy
 

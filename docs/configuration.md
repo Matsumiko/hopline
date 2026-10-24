@@ -44,7 +44,7 @@ An array of tables. Each entry declares one subscription source.
 url = "https://example.invalid/sub"
 ```
 
-Subscription URLs are seeded once into the managed-subscription database. After the first startup, the panel manages subscriptions; the config entries serve only as a bootstrap seed.
+First-time provisioning only. On the first start these URLs are imported into the managed-subscription database and a `subscriptions_seeded` marker is stored; later starts ignore this section entirely. On an established host the database is the single source of truth, so this section may be removed. Deleting a source from the panel is permanent.
 
 ### `static_nodes`
 
